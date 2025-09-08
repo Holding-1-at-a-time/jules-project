@@ -1,30 +1,18 @@
 'use client';
 
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
 import QrCodeDisplay from '@/components/dashboard/QrCodeDisplay';
+import Reports from './Reports';
 
 export default function DetailerDashboardPage() {
-  // This is a placeholder for getting the tenant ID.
-  // In a real app, you'd get this from the user's session or another source.
-  const tenantId = 'tenant123'; // Placeholder
-
-  // These hooks will not work without a running Convex instance and a valid tenantId.
-  // const tenant = useQuery(api.tenants.get, { id: tenantId });
-  // const generateQrCode = useMutation(api.tenants.generateQrCode);
-
-  // For now, we'll use placeholder data.
-  const tenant = {
-    _id: 'tenant123',
-    name: 'Test Tenant',
-    qrCode: null,
-  };
-  const generateQrCode = async () => {
-    alert('Generating QR code...');
-  };
-
+  const user = useQuery(api.users.me);
+  const tenant = useQuery(api.tenants.get, user ? { id: user.tenantId! } : 'skip');
+  const generateQrCode = useMutation(api.tenants.generateQrCode);
 
   const handleGenerateQrCode = () => {
     if (tenant) {
-      // generateQrCode({ tenantId: tenant._id });
+      generateQrCode({ tenantId: tenant._id });
     }
   };
 
@@ -50,6 +38,10 @@ export default function DetailerDashboardPage() {
         ) : (
           <p>Loading tenant data...</p>
         )}
+      </div>
+
+      <div className="mt-8">
+        <Reports />
       </div>
     </div>
   );

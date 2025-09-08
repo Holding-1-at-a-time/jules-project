@@ -3,10 +3,31 @@ import { internalMutation, action, httpAction } from './_generated/server';
 import { internal } from './_generated/api';
 import Stripe from 'stripe';
 
-// TODO: Add your Stripe secret key here
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+if (!stripeSecretKey) {
+  throw new Error('STRIPE_SECRET_KEY environment variable not set!');
+}
+
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+if (!webhookSecret) {
+  throw new Error('STRIPE_WEBHOOK_SECRET environment variable not set!');
+}
+
+const stripe = new Stripe(stripeSecretKey, {
   apiVersion: '2024-04-10',
 });
+
+// Mapping of plan names to Stripe Price IDs
+// TODO: Replace with your actual Price IDs
+const planToPriceId = {
+  Launch: 'price_1P5qKkRKRiyf2Y7s4YJ4g3jJ',
+  Grow: 'price_1P5qKkRKRiyf2Y7s4YJ4g3jK',
+  Scale: 'price_1P5qKkRKRiyf2Y7s4YJ4g3jL',
+};
+
+const priceIdToPlan = Object.fromEntries(
+  Object.entries(planToPriceId).map(([plan, priceId]) => [priceId, plan])
+);
 
 export const storeStripeCustomerId = internalMutation({
   args: { userId: v.id('users'), stripeCustomerId: v.string() },
@@ -17,7 +38,7 @@ export const storeStripeCustomerId = internalMutation({
 
 // Create a checkout session
 export const createStripeCheckoutSession = action({
-  args: { planId: v.string(), tenantId: v.id('tenants') },
+  args: { plan: v.union(v.literal('Launch'), v.literal('Grow'), v.literal('Scale')), tenantId: v.id('tenants') },
   handler: async (ctx, args) => {
     const user = await ctx.auth.getUserIdentity();
 
@@ -45,9 +66,11 @@ export const createStripeCheckoutSession = action({
       });
     }
 
+    const priceId = planToPriceId[args.plan];
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      line_items: [{ price: args.planId, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
       customer: stripeCustomerId,
       success_url: `${process.env.NEXT_PUBLIC_URL}/dashboard?payment=success`,
@@ -56,6 +79,30 @@ export const createStripeCheckoutSession = action({
         userId: dbUser._id,
         tenantId: args.tenantId,
       },
+    });
+
+    return session.url;
+  },
+});
+
+export const createStripeCustomerPortalSession = action({
+  args: {},
+  handler: async (ctx) => {
+    const user = await ctx.auth.getUserIdentity();
+
+    if (!user) {
+      throw new Error('You must be logged in to manage your subscription.');
+    }
+
+    const dbUser = await ctx.runQuery(internal.users.getUser, { clerkId: user.subject });
+
+    if (!dbUser || !dbUser.stripeCustomerId) {
+      throw new Error('User not found or does not have a Stripe customer ID.');
+    }
+
+    const session = await stripe.billingPortal.sessions.create({
+      customer: dbUser.stripeCustomerId,
+      return_url: `${process.env.NEXT_PUBLIC_URL}/dashboard`,
     });
 
     return session.url;
@@ -91,7 +138,7 @@ export const updateSubscription = internalMutation({
   args: {
     subscriptionId: v.string(),
     plan: v.string(),
-    status: v.string(),
+    status: v.any(), // Assuming the status can be any of the defined literals
   },
   handler: async (ctx, { subscriptionId, plan, status }) => {
     const user = await ctx.db
@@ -125,14 +172,14 @@ export const cancelSubscription = internalMutation({
     await ctx.db.patch(user._id, {
       subscriptionId: undefined,
       plan: undefined,
-      subscriptionStatus: 'cancelled',
+      subscriptionStatus: 'canceled',
     });
   },
 });
 
 export const handleFailedPayment = internalMutation({
-  args: { subscriptionId: v.string() },
-  handler: async (ctx, { subscriptionId }) => {
+  args: { subscriptionId: v.string(), status: v.any() },
+  handler: async (ctx, { subscriptionId, status }) => {
     const user = await ctx.db
       .query('users')
       .withIndex('by_subscription_id', (q) => q.eq('subscriptionId', subscriptionId))
@@ -143,7 +190,7 @@ export const handleFailedPayment = internalMutation({
     }
 
     await ctx.db.patch(user._id, {
-      subscriptionStatus: 'past_due',
+      subscriptionStatus: status,
     });
   },
 });
@@ -153,14 +200,12 @@ export const stripeWebhook = httpAction(async (ctx, request) => {
   const sig = request.headers.get('stripe-signature') as string;
   const body = await request.text();
 
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET as string;
-
   let event: Stripe.Event;
 
   try {
     event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
   } catch (err) {
-    console.error(err);
+    console.error('Webhook Error:', err);
     return new Response('Webhook Error', { status: 400 });
   }
 
@@ -170,15 +215,21 @@ export const stripeWebhook = httpAction(async (ctx, request) => {
   // Handle the event
   switch (event.type) {
     case 'checkout.session.completed':
+      console.log('checkout.session.completed', session);
       const completedSession = await stripe.checkout.sessions.retrieve(session.id, {
         expand: ['line_items'],
       });
       const lineItems = completedSession.line_items;
       if (!lineItems) {
-        console.error('No line items found in session');
+        console.error('No line items found in session', { sessionId: session.id });
         break;
       }
-      const plan = lineItems.data[0].price!.id;
+      const priceId = lineItems.data[0].price!.id;
+      const plan = priceIdToPlan[priceId];
+      if (!plan) {
+        console.error(`Plan not found for price ID: ${priceId}`);
+        break;
+      }
       await ctx.runMutation(internal.stripe.fulfillSubscription, {
         userId: session.metadata!.userId,
         subscriptionId: session.subscription as string,
@@ -186,20 +237,30 @@ export const stripeWebhook = httpAction(async (ctx, request) => {
       });
       break;
     case 'customer.subscription.updated':
+      console.log('customer.subscription.updated', subscription);
+      const updatedPriceId = subscription.items.data[0].price.id;
+      const updatedPlan = priceIdToPlan[updatedPriceId];
+      if (!updatedPlan) {
+        console.error(`Plan not found for price ID: ${updatedPriceId}`);
+        break;
+      }
       await ctx.runMutation(internal.stripe.updateSubscription, {
         subscriptionId: subscription.id,
-        plan: subscription.items.data[0].price.id,
+        plan: updatedPlan,
         status: subscription.status,
       });
       break;
     case 'customer.subscription.deleted':
+      console.log('customer.subscription.deleted', subscription);
       await ctx.runMutation(internal.stripe.cancelSubscription, {
         subscriptionId: subscription.id,
       });
       break;
     case 'invoice.payment_failed':
+      console.log('invoice.payment_failed', event.data.object);
       await ctx.runMutation(internal.stripe.handleFailedPayment, {
         subscriptionId: subscription.id,
+        status: subscription.status,
       });
       break;
     default:

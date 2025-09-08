@@ -16,8 +16,20 @@ export default defineSchema({
     // Stripe fields
     stripeCustomerId: v.optional(v.string()),
     subscriptionId: v.optional(v.string()),
-    plan: v.optional(v.string()),
-    subscriptionStatus: v.optional(v.string()),
+    plan: v.optional(
+      v.union(v.literal('Launch'), v.literal('Grow'), v.literal('Scale'))
+    ),
+    subscriptionStatus: v.optional(
+      v.union(
+        v.literal('trialing'),
+        v.literal('active'),
+        v.literal('past_due'),
+        v.literal('canceled'),
+        v.literal('unpaid'),
+        v.literal('incomplete'),
+        v.literal('incomplete_expired')
+      )
+    ),
   })
     .index('by_clerk_id', ['clerkId'])
     .index('by_subscription_id', ['subscriptionId']),

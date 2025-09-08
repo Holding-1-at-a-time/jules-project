@@ -1,11 +1,21 @@
 import { internalMutation, mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 import { getUser, assertRole } from './auth';
-import { Clerk } from '@clerk/clerk-sdk-node';
+// SlickSolutions/slicksolutions/convex/users.ts
 
-const clerk = new Clerk({
-  secretKey: process.env.CLERK_SECRET_KEY,
+import { createClerkClient } from '@clerk/backend';
+
+-const clerk = new Clerk({
+-  secretKey: process.env.CLERK_SECRET_KEY,
+const clerkSecret = process.env.CLERK_SECRET_KEY;
+if (!clerkSecret) {
+  throw new Error('Missing CLERK_SECRET_KEY');
+}
+const clerkClient = createClerkClient({
+  secretKey: clerkSecret,
 });
+
+// ...later, use clerkClient.organizations.createOrganizationInvitation({...})
 
 export const me = query({
   args: {},

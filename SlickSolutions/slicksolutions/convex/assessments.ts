@@ -1,5 +1,6 @@
-import { mutation } from './_generated/server';
+import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
+import { api } from './_generated/api';
 
 // Create a new assessment
 export const create = mutation({
@@ -22,5 +23,19 @@ export const create = mutation({
       _id: 'assessment1',
       ...args,
     };
+  },
+});
+
+export const getForClient = query({
+  args: {
+    clientId: v.id('clients'),
+    tenantId: v.id('tenants'),
+  },
+  handler: async (ctx, { clientId, tenantId }) => {
+    return await ctx.db
+      .query('assessments')
+      .withIndex('by_tenant_id', (q) => q.eq('tenantId', tenantId))
+      .filter((q) => q.eq(q.field('clientId'), clientId))
+      .collect();
   },
 });

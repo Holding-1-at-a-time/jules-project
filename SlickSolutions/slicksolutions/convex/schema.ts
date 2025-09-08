@@ -47,4 +47,9 @@ export default defineSchema({
     totalPrice: v.number(),
     // Add other estimate-related fields here
   }).index('by_assessment_id', ['assessmentId']),
+  chatHistory: defineTable({
+    userId: v.id('users'),
+    userMessage: v.string(),
+    aiResponse: v.string(),
+  }).index('by_user_id', ['userId']),
 });

@@ -57,7 +57,9 @@ export const inviteClient = mutation({
   args: { email: v.string() },
   handler: async (ctx, { email }) => {
     const user = await getUser(ctx);
-    assertRole(ctx, user, 'detailer');
+    if (!user.roles.includes('admin') && !user.roles.includes('detailer')) {
+      throw new Error('User does not have permission to invite clients');
+    }
 
     if (!user.orgId) {
       throw new Error('User does not belong to an organization');
@@ -81,6 +83,11 @@ export const assignRole = mutation({
     const targetUser = await ctx.db.get(userId);
     if (!targetUser) {
       throw new Error('User not found');
+    }
+
+    if (targetUser.roles.includes(role)) {
+      // Role already exists, do nothing
+      return;
     }
 
     await ctx.db.patch(targetUser._id, {

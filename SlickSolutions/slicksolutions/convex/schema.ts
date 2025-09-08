@@ -6,24 +6,30 @@ export default defineSchema({
     name: v.string(),
     qrCode: v.optional(v.string()),
     // Add other tenant-specific fields here
-  }),
+  }).index('by_name', ['name']),
   users: defineTable({
     clerkId: v.string(),
     email: v.string(),
     name: v.string(),
     tenantId: v.optional(v.id('tenants')),
     roles: v.array(v.string()), // e.g., ['admin', 'detailer', 'client']
-  }).index('by_clerk_id', ['clerkId']),
+  })
+    .index('by_clerk_id', ['clerkId'])
+    .index('by_tenant_id', ['tenantId']),
   detailers: defineTable({
     userId: v.id('users'),
     tenantId: v.id('tenants'),
     // Add other detailer-specific fields here
-  }).index('by_user_id', ['userId']),
+  })
+    .index('by_user_id', ['userId'])
+    .index('by_tenant_id', ['tenantId']),
   clients: defineTable({
     userId: v.id('users'),
     tenantId: v.id('tenants'),
     // Add other client-specific fields here
-  }).index('by_user_id', ['userId']),
+  })
+    .index('by_user_id', ['userId'])
+    .index('by_tenant_id', ['tenantId']),
   services: defineTable({
     tenantId: v.id('tenants'),
     name: v.string(),
@@ -41,7 +47,9 @@ export default defineSchema({
     }),
     selectedServices: v.array(v.id('services')),
     // Add other assessment-related fields here
-  }).index('by_tenant_id', ['tenantId']),
+  })
+    .index('by_tenant_id', ['tenantId'])
+    .index('by_client_id', ['clientId']),
   estimates: defineTable({
     assessmentId: v.id('assessments'),
     totalPrice: v.number(),

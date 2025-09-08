@@ -1,27 +1,23 @@
 import { query } from './_generated/server';
 import { v } from 'convex/values';
+import { getUserAndTenant } from './utils';
 
-// Get services for a tenant
+/**
+ * Get services for a tenant.
+ * This query is protected and will only return services for the tenant that the user is a member of.
+ */
 export const getForTenant = query({
   args: { tenantId: v.id('tenants') },
   handler: async (ctx, args) => {
-    // This is a placeholder.
-    // In a real application, you would fetch the services from the database.
-    return [
-      {
-        _id: 'service1',
-        tenantId: args.tenantId,
-        name: 'Basic Wash',
-        description: 'A basic exterior wash.',
-        basePrice: 25,
-      },
-      {
-        _id: 'service2',
-        tenantId: args.tenantId,
-        name: 'Full Detail',
-        description: 'A complete interior and exterior detail.',
-        basePrice: 150,
-      },
-    ];
+    const { user } = await getUserAndTenant(ctx, {});
+
+    if (user.tenantId !== args.tenantId) {
+      throw new Error('Not authorized to view services for this tenant');
+    }
+
+    return await ctx.db
+      .query('services')
+      .withIndex('by_tenant_id', (q) => q.eq('tenantId', args.tenantId))
+      .collect();
   },
 });

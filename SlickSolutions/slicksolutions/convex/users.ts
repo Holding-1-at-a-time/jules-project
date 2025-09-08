@@ -1,14 +1,13 @@
 import { query } from './_generated/server';
+import { getUserAndTenant } from './utils';
 
-// Get the current user
+/**
+ * Get the current user and their tenant.
+ * This is a simple query that uses the getUserAndTenant helper.
+ */
 export const me = query({
   args: {},
   handler: async (ctx) => {
-    // This is a placeholder.
-    // In a real application, you would get the user's identity from the context.
-    return {
-      name: 'Test User',
-      email: 'test@example.com',
-    };
+    return await getUserAndTenant(ctx, {});
   },
 });

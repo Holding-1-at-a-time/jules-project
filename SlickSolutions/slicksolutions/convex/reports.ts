@@ -1,6 +1,15 @@
 import { query } from './_generated/server';
 import { v } from 'convex/values';
 
+/**
+ * Generates a custom report based on the provided filters and data points.
+ * @param tenantId The ID of the tenant.
+ * @param startDate The start date of the report period.
+ * @param endDate The end date of the report period.
+ * @param filters An object containing filters for the report.
+ * @param dataPoints An array of data points to include in the report.
+ * @returns An object containing the aggregated report data.
+ */
 export const generate = query({
   args: {
     tenantId: v.id('tenants'),
@@ -59,6 +68,15 @@ export const generate = query({
 
 import { action } from './_generated/server';
 
+/**
+ * Generates a CSV file of a custom report.
+ * @param tenantId The ID of the tenant.
+ * @param startDate The start date of the report period.
+ * @param endDate The end date of the report period.
+ * @param filters An object containing filters for the report.
+ * @param dataPoints An array of data points to include in the report.
+ * @returns A string containing the report data in CSV format.
+ */
 export const generateCsv = action({
   args: {
     tenantId: v.id('tenants'),

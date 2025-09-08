@@ -75,6 +75,7 @@ export default defineSchema({
     clientId: v.id('clients'),
     message: v.string(),
     from: v.string(), // 'user' or 'ai'
+    createdAt: v.number(),
   })
     .index('by_tenant_id', ['tenantId'])
     .index('by_client_id', ['clientId']),

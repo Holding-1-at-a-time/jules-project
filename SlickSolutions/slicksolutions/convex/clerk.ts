@@ -5,6 +5,11 @@ import { internal } from './_generated/api';
 
 const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
 
+/**
+ * An HTTP action to handle webhooks from Clerk.
+ * It verifies the webhook signature and processes the event.
+ * Currently, it only handles the 'user.created' event.
+ */
 export const fulfill = httpAction(async (ctx, request) => {
   if (!webhookSecret) {
     throw new Error('CLERK_WEBHOOK_SECRET is not set in the environment.');

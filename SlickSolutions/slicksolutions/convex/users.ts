@@ -1,7 +1,13 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 
-// Create a new user
+/**
+ * Creates a new user.
+ * @param clerkId The ID of the user in Clerk.
+ * @param email The email of the user.
+ * @param name The name of the user.
+ * @returns The ID of the newly created user.
+ */
 export const create = mutation({
   args: {
     clerkId: v.string(),
@@ -19,7 +25,11 @@ export const create = mutation({
   },
 });
 
-// Get a user by Clerk ID
+/**
+ * Gets a user by their Clerk ID.
+ * @param clerkId The ID of the user in Clerk.
+ * @returns The user object, or null if not found.
+ */
 export const get = query({
   args: { clerkId: v.string() },
   handler: async (ctx, args) => {
@@ -31,7 +41,12 @@ export const get = query({
   },
 });
 
-// Update a user
+/**
+ * Updates an existing user.
+ * @param id The ID of the user to update.
+ * @param tenantId The new ID of the tenant for the user.
+ * @param roles The new roles for the user.
+ */
 export const update = mutation({
   args: {
     id: v.id('users'),
@@ -44,7 +59,10 @@ export const update = mutation({
   },
 });
 
-// Get the current user
+/**
+ * Gets the currently authenticated user.
+ * @returns The user object, or null if not authenticated.
+ */
 export const me = query({
   args: {},
   handler: async (ctx) => {

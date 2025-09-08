@@ -3,6 +3,10 @@ import { api } from '../_generated/api';
 
 const crons = cronJobs();
 
+/**
+ * A weekly cron job that generates business recommendations for all tenants.
+ * It runs every Monday at 8:00 AM UTC.
+ */
 crons.weekly(
   'generate business recommendations',
   { dayOfWeek: 'monday', hourUTC: 8, minuteUTC: 0 },

@@ -4,6 +4,15 @@ import { api } from '../_generated/api';
 
 const OLLAMA_URL = 'http://localhost:11434/api/generate';
 
+/**
+ * Handles the AI chat functionality for the customer concierge.
+ * It saves the user's message, fetches context, calls the Ollama AI model,
+ * saves the AI's response, and returns the response to the client.
+ *
+ * @param message The client's message.
+ * @param clientId The ID of the client.
+ * @param tenantId The ID of the tenant.
+ */
 export const chat = action({
   args: {
     message: v.string(),
@@ -40,23 +49,30 @@ export const chat = action({
     `;
 
     // 4. Call Ollama
-    const response = await fetch(OLLAMA_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'llama3',
-        prompt: prompt,
-        stream: false,
-      }),
-    });
+    let data;
+    try {
+      const response = await fetch(OLLAMA_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'llama3',
+          prompt: prompt,
+          stream: false,
+        }),
+      });
 
-    if (!response.ok) {
-      throw new Error(`Ollama request failed with status ${response.status}`);
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`Ollama request failed with status ${response.status}: ${errorBody}`);
+      }
+
+      data = await response.json();
+    } catch (error) {
+      console.error('Error calling Ollama:', error);
+      throw new Error('Failed to get a response from the AI model.');
     }
-
-    const data = await response.json();
     const aiResponse = data.response;
 
     // 5. Save AI response

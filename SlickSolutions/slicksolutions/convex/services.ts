@@ -1,7 +1,14 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 
-// Create a new service
+/**
+ * Creates a new service for a tenant.
+ * @param tenantId The ID of the tenant.
+ * @param name The name of the service.
+ * @param description The description of the service.
+ * @param basePrice The base price of the service.
+ * @returns The ID of the newly created service.
+ */
 export const create = mutation({
   args: {
     tenantId: v.id('tenants'),
@@ -15,7 +22,11 @@ export const create = mutation({
   },
 });
 
-// Get services for a tenant
+/**
+ * Gets all services for a specific tenant.
+ * @param tenantId The ID of the tenant.
+ * @returns A list of services for the tenant.
+ */
 export const getForTenant = query({
   args: { tenantId: v.id('tenants') },
   handler: async (ctx, args) => {
@@ -27,7 +38,14 @@ export const getForTenant = query({
   },
 });
 
-// Update a service
+/**
+ * Updates an existing service.
+ * @param id The ID of the service to update.
+ * @param tenantId The ID of the tenant.
+ * @param name The new name of the service.
+ * @param description The new description of the service.
+ * @param basePrice The new base price of the service.
+ */
 export const update = mutation({
   args: {
     id: v.id('services'),
@@ -47,7 +65,11 @@ export const update = mutation({
   },
 });
 
-// Delete a service
+/**
+ * Deletes a service.
+ * @param id The ID of the service to delete.
+ * @param tenantId The ID of the tenant.
+ */
 export const del = mutation({
   args: {
     id: v.id('services'),

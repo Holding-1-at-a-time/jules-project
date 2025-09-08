@@ -4,6 +4,12 @@ import { api } from '../_generated/api';
 
 const OLLAMA_URL = 'http://localhost:11434/api/generate';
 
+/**
+ * Generates business recommendations for a tenant using the Ollama AI model.
+ * This action is intended to be called by a cron job.
+ *
+ * @param tenantId The ID of the tenant to generate recommendations for.
+ */
 export const generateRecommendation = action({
   args: {
     tenantId: v.id('tenants'),
@@ -33,23 +39,30 @@ export const generateRecommendation = action({
     `;
 
     // 3. Call Ollama
-    const response = await fetch(OLLAMA_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'llama3',
-        prompt: prompt,
-        stream: false,
-      }),
-    });
+    let data;
+    try {
+      const response = await fetch(OLLAMA_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'llama3',
+          prompt: prompt,
+          stream: false,
+        }),
+      });
 
-    if (!response.ok) {
-      throw new Error(`Ollama request failed with status ${response.status}`);
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`Ollama request failed with status ${response.status}: ${errorBody}`);
+      }
+
+      data = await response.json();
+    } catch (error) {
+      console.error('Error calling Ollama:', error);
+      throw new Error('Failed to get a response from the AI model.');
     }
-
-    const data = await response.json();
     const recommendation = data.response;
 
     // 4. Save recommendation

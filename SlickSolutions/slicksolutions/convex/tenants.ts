@@ -2,7 +2,11 @@ import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 import QRCode from 'qrcode';
 
-// Create a new tenant
+/**
+ * Creates a new tenant.
+ * @param name The name of the tenant.
+ * @returns The ID of the newly created tenant.
+ */
 export const create = mutation({
   args: {
     name: v.string(),
@@ -13,7 +17,11 @@ export const create = mutation({
   },
 });
 
-// Get a tenant by ID
+/**
+ * Gets a tenant by their ID.
+ * @param id The ID of the tenant.
+ * @returns The tenant object, or null if not found.
+ */
 export const get = query({
   args: { id: v.id('tenants') },
   handler: async (ctx, args) => {
@@ -22,7 +30,10 @@ export const get = query({
   },
 });
 
-// Get all tenants
+/**
+ * Gets all tenants.
+ * @returns A list of all tenants.
+ */
 export const getAll = query({
   args: {},
   handler: async (ctx) => {
@@ -31,7 +42,11 @@ export const getAll = query({
   },
 });
 
-// Generate a QR code for a tenant
+/**
+ * Generates a QR code for a tenant's assessment page and saves it to the database.
+ * @param tenantId The ID of the tenant.
+ * @returns The data URL of the generated QR code.
+ */
 export const generateQrCode = mutation({
   args: { tenantId: v.id('tenants') },
   handler: async (ctx, { tenantId }) => {

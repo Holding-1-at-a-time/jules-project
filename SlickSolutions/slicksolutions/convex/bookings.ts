@@ -1,7 +1,14 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 
-// Create a new booking
+/**
+ * Creates a new booking.
+ * @param tenantId The ID of the tenant.
+ * @param clientId The ID of the client.
+ * @param assessmentId The ID of the associated assessment.
+ * @param scheduledTime The scheduled time for the booking (Unix timestamp).
+ * @returns The ID of the newly created booking.
+ */
 export const create = mutation({
   args: {
     tenantId: v.id('tenants'),
@@ -18,7 +25,12 @@ export const create = mutation({
   },
 });
 
-// Update a booking
+/**
+ * Updates an existing booking.
+ * @param id The ID of the booking to update.
+ * @param scheduledTime The new scheduled time for the booking.
+ * @param status The new status of the booking.
+ */
 export const update = mutation({
   args: {
     id: v.id('bookings'),
@@ -31,7 +43,11 @@ export const update = mutation({
   },
 });
 
-// Get bookings for a tenant
+/**
+ * Gets all bookings for a specific tenant.
+ * @param tenantId The ID of the tenant.
+ * @returns A list of bookings for the tenant.
+ */
 export const getForTenant = query({
   args: { tenantId: v.id('tenants') },
   handler: async (ctx, args) => {
@@ -43,7 +59,11 @@ export const getForTenant = query({
   },
 });
 
-// Get bookings for a client
+/**
+ * Gets all bookings for a specific client.
+ * @param clientId The ID of the client.
+ * @returns A list of bookings for the client.
+ */
 export const getForClient = query({
   args: { clientId: v.id('clients') },
   handler: async (ctx, args) => {

@@ -8,9 +8,9 @@ export default function Reports() {
   const user = useQuery(api.users.me);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [filters, setFilters] = useState<string[]>([]);
   const [dataPoints, setDataPoints] = useState<string[]>(['revenue', 'booking_count']);
   const [reportData, setReportData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const generateReport = useLazyQuery(api.reports.generate);
   const generateCsv = useAction(api.reports.generateCsv);
@@ -18,16 +18,16 @@ export default function Reports() {
   const handleGenerateReport = async () => {
     if (!user || !user.tenantId) return;
 
+    setIsLoading(true);
     const result = await generateReport({
       tenantId: user.tenantId,
       startDate,
       endDate,
-      filters: {
-        // simplified for now
-      },
+      filters: {},
       dataPoints,
     });
     setReportData(result);
+    setIsLoading(false);
   };
 
   const handleDownloadCsv = async () => {
@@ -37,9 +37,7 @@ export default function Reports() {
       tenantId: user.tenantId,
       startDate,
       endDate,
-      filters: {
-        // simplified for now
-      },
+      filters: {},
       dataPoints,
     });
 
@@ -55,59 +53,85 @@ export default function Reports() {
   };
 
   return (
-    <div>
-      <h2>Custom Reports</h2>
-      <div>
-        <label>
-          Start Date:
+    <div className="p-6 bg-white rounded-lg shadow-md">
+      <h2 className="text-2xl font-bold mb-4">Custom Reports</h2>
+      <div className="flex gap-4 mb-4">
+        <div className="flex-1">
+          <label className="block text-sm font-medium text-gray-700">Start Date</label>
           <input
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
+            className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"
           />
-        </label>
-        <label>
-          End Date:
+        </div>
+        <div className="flex-1">
+          <label className="block text-sm font-medium text-gray-700">End Date</label>
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
+            className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"
           />
-        </label>
-      </div>
-      <div>
-        <label>
-          Data Points:
-          <select multiple value={dataPoints} onChange={(e) => setDataPoints(Array.from(e.target.selectedOptions, (option) => option.value))}>
+        </div>
+        <div className="flex-1">
+          <label className="block text-sm font-medium text-gray-700">Data Points</label>
+          <select
+            multiple
+            value={dataPoints}
+            onChange={(e) => setDataPoints(Array.from(e.target.selectedOptions, (option) => option.value))}
+            className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"
+          >
             <option value="revenue">Revenue</option>
             <option value="booking_count">Booking Count</option>
           </select>
-        </label>
+        </div>
       </div>
-      <button onClick={handleGenerateReport}>Generate Report</button>
+      <button
+        onClick={handleGenerateReport}
+        className="px-4 py-2 bg-blue-600 text-white rounded-md disabled:bg-blue-300"
+        disabled={isLoading}
+      >
+        {isLoading ? 'Generating...' : 'Generate Report'}
+      </button>
 
-      {reportData && (
+      {isLoading && <div className="mt-8 text-center">Loading...</div>}
+
+      {!isLoading && reportData && (
         <div className="mt-8">
-          <h3>Report Results</h3>
-          <table>
-            <thead>
-              <tr>
-                {Object.keys(reportData).map((key) => (
-                  <th key={key}>{key}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                {Object.values(reportData).map((value, index) => (
-                  <td key={index}>{value}</td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-          <button onClick={handleDownloadCsv} className="mt-4">
-            Download CSV
-          </button>
+          <h3 className="text-xl font-bold mb-2">Report Results</h3>
+          {Object.keys(reportData).length > 0 ? (
+            <>
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {Object.keys(reportData).map((key) => (
+                      <th key={key} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {key}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  <tr>
+                    {Object.values(reportData).map((value, index) => (
+                      <td key={index} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {value}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+              <button
+                onClick={handleDownloadCsv}
+                className="mt-4 px-4 py-2 bg-green-600 text-white rounded-md"
+              >
+                Download CSV
+              </button>
+            </>
+          ) : (
+            <p>No data found for the selected criteria.</p>
+          )}
         </div>
       )}
     </div>

@@ -1,7 +1,14 @@
 import { mutation } from './_generated/server';
 import { v } from 'convex/values';
 
-// Create a new subscription
+/**
+ * Creates a new subscription record for a user.
+ * @param userId The ID of the user.
+ * @param stripeSubscriptionId The ID of the subscription in Stripe.
+ * @param stripeCustomerId The ID of the customer in Stripe.
+ * @param stripePriceId The ID of the price (plan) in Stripe.
+ * @param stripeCurrentPeriodEnd The end of the current billing period (Unix timestamp).
+ */
 export const create = mutation({
   args: {
     userId: v.id('users'),
@@ -15,7 +22,12 @@ export const create = mutation({
   },
 });
 
-// Update a subscription
+/**
+ * Updates an existing subscription record.
+ * @param stripeSubscriptionId The ID of the subscription in Stripe.
+ * @param stripePriceId The new ID of the price (plan) in Stripe.
+ * @param stripeCurrentPeriodEnd The new end of the current billing period (Unix timestamp).
+ */
 export const update = mutation({
   args: {
     stripeSubscriptionId: v.string(),
@@ -39,7 +51,10 @@ export const update = mutation({
   },
 });
 
-// Delete a subscription
+/**
+ * Deletes a subscription record.
+ * @param stripeSubscriptionId The ID of the subscription in Stripe to delete.
+ */
 export const del = mutation({
   args: {
     stripeSubscriptionId: v.string(),

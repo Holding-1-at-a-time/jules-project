@@ -1,7 +1,15 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 
-// Create a new assessment
+/**
+ * Creates a new assessment.
+ * @param tenantId The ID of the tenant.
+ * @param clientId The ID of the client.
+ * @param vehicleInfo Information about the vehicle.
+ * @param selectedServices An array of selected service IDs.
+ * @param notes Optional notes for the assessment.
+ * @returns The ID of the newly created assessment.
+ */
 export const create = mutation({
   args: {
     tenantId: v.id('tenants'),
@@ -24,7 +32,11 @@ export const create = mutation({
   },
 });
 
-// Get assessments for a tenant
+/**
+ * Gets all assessments for a specific tenant.
+ * @param tenantId The ID of the tenant.
+ * @returns A list of assessments for the tenant.
+ */
 export const getForTenant = query({
   args: { tenantId: v.id('tenants') },
   handler: async (ctx, args) => {
@@ -36,7 +48,11 @@ export const getForTenant = query({
   },
 });
 
-// Get assessments for a client
+/**
+ * Gets all assessments for a specific client.
+ * @param clientId The ID of the client.
+ * @returns A list of assessments for the client.
+ */
 export const getForClient = query({
   args: { clientId: v.id('clients') },
   handler: async (ctx, args) => {

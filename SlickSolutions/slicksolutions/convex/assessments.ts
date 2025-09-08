@@ -1,4 +1,4 @@
-import { mutation } from './_generated/server';
+import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 import { getUserAndTenant } from './utils';
 
@@ -8,8 +8,7 @@ import { getUserAndTenant } from './utils';
  */
 export const create = mutation({
   args: {
-    tenantId: v.id('tenants'),
-    clientId: v.id('clients'),
+    clientId: v.id('users'),
     vehicleInfo: v.object({
       vin: v.string(),
       make: v.string(),
@@ -19,12 +18,51 @@ export const create = mutation({
     selectedServices: v.array(v.id('services')),
   },
   handler: async (ctx, args) => {
-    const { user } = await getUserAndTenant(ctx, {});
+    const user = await getUser(ctx);
+    assertRole(ctx, user, 'client');
 
-    if (user.tenantId !== args.tenantId) {
-      throw new Error('Not authorized to create an assessment for this tenant');
+    if (!user.orgId) {
+      throw new Error('User does not belong to an organization');
     }
 
-    return await ctx.db.insert('assessments', args);
+    const tenant = await ctx.db
+      .query('tenants')
+      .withIndex('by_org_id', (q) => q.eq('orgId', user.orgId as string))
+      .unique();
+
+    if (!tenant) {
+      throw new Error('Tenant not found');
+    }
+
+    await ctx.db.insert('assessments', {
+      tenantId: tenant._id,
+      ...args,
+    });
+  },
+});
+
+export const getAssessments = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getUser(ctx);
+    assertRole(ctx, user, 'detailer');
+
+    if (!user.orgId) {
+      return [];
+    }
+
+    const tenant = await ctx.db
+      .query('tenants')
+      .withIndex('by_org_id', (q) => q.eq('orgId', user.orgId as string))
+      .unique();
+
+    if (!tenant) {
+      return [];
+    }
+
+    return await ctx.db
+      .query('assessments')
+      .withIndex('by_tenant_id', (q) => q.eq('tenantId', tenant._id))
+      .collect();
   },
 });

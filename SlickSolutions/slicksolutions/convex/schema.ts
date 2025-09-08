@@ -4,14 +4,15 @@ import { v } from 'convex/values';
 export default defineSchema({
   tenants: defineTable({
     name: v.string(),
+    orgId: v.string(), // Clerk organization ID
     qrCode: v.optional(v.string()),
     // Add other tenant-specific fields here
-  }).index('by_name', ['name']),
+  }).index('by_org_id', ['orgId']),
   users: defineTable({
-    clerkId: v.string(),
-    email: v.string(),
     name: v.string(),
-    tenantId: v.optional(v.id('tenants')),
+    email: v.string(),
+    clerkId: v.string(), // Clerk user ID
+    orgId: v.optional(v.string()), // Clerk organization ID
     roles: v.array(v.string()), // e.g., ['admin', 'detailer', 'client']
   })
     .index('by_clerk_id', ['clerkId'])
@@ -38,7 +39,7 @@ export default defineSchema({
   }).index('by_tenant_id', ['tenantId']),
   assessments: defineTable({
     tenantId: v.id('tenants'),
-    clientId: v.id('clients'),
+    clientId: v.id('users'), // Link to the user with the 'client' role
     vehicleInfo: v.object({
       vin: v.string(),
       make: v.string(),

@@ -13,7 +13,14 @@ export default defineSchema({
     name: v.string(),
     tenantId: v.optional(v.id('tenants')),
     roles: v.array(v.string()), // e.g., ['admin', 'detailer', 'client']
-  }).index('by_clerk_id', ['clerkId']),
+    // Stripe fields
+    stripeCustomerId: v.optional(v.string()),
+    subscriptionId: v.optional(v.string()),
+    plan: v.optional(v.string()),
+    subscriptionStatus: v.optional(v.string()),
+  })
+    .index('by_clerk_id', ['clerkId'])
+    .index('by_subscription_id', ['subscriptionId']),
   detailers: defineTable({
     userId: v.id('users'),
     tenantId: v.id('tenants'),

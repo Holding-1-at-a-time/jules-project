@@ -1,14 +1,43 @@
-import { query } from './_generated/server';
+import { internalQuery, query } from './_generated/server';
+import { v } from 'convex/values';
 
 // Get the current user
 export const me = query({
   args: {},
   handler: async (ctx) => {
-    // This is a placeholder.
-    // In a real application, you would get the user's identity from the context.
-    return {
-      name: 'Test User',
-      email: 'test@example.com',
-    };
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
+    }
+    return await ctx.db
+      .query('users')
+      .withIndex('by_clerk_id', (q) => q.eq('clerkId', identity.subject))
+      .unique();
+  },
+});
+
+export const getSubscriptionStatus = query({
+  args: { userId: v.id('users') },
+  async handler(ctx, args) {
+    const user = await ctx.db.get(args.userId);
+    return user?.subscriptionStatus;
+  },
+});
+
+export const getStripeCustomerId = query({
+  args: { userId: v.id('users') },
+  async handler(ctx, args) {
+    const user = await ctx.db.get(args.userId);
+    return user?.stripeCustomerId;
+  },
+});
+
+export const getUser = internalQuery({
+  args: { clerkId: v.string() },
+  async handler(ctx, args) {
+    return await ctx.db
+      .query('users')
+      .withIndex('by_clerk_id', (q) => q.eq('clerkId', args.clerkId))
+      .unique();
   },
 });

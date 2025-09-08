@@ -1,0 +1,54 @@
+name: "CodeQL Advanced"
+
+on:
+  push:
+    branches: [ "feat/initial-scaffolding-and-qr-code" ]
+  pull_request:
+    branches: [ "feat/initial-scaffolding-and-qr-code" ]
+  schedule:
+    - cron: '37 20 * * 2'
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - language: javascript-typescript
+          build-mode: none
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+        build-mode: ${{ matrix.build-mode }}
+        queries: +security-extended,+security-and-quality,+codeql/javascript-experimental-queries
+
+    - if: matrix.build-mode == 'manual'
+      shell: bash
+      run: |
+        echo 'Replace this with your TypeScript build commands if needed'
+        echo 'Example: npm install && npm run build'
+        exit 1
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:${{matrix.language}}"

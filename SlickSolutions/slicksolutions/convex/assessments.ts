@@ -1,11 +1,10 @@
-import { mutation } from './_generated/server';
+import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
+import { getUser, assertRole } from './auth';
 
-// Create a new assessment
-export const create = mutation({
+export const createAssessment = mutation({
   args: {
-    tenantId: v.id('tenants'),
-    clientId: v.id('clients'),
+    clientId: v.id('users'),
     vehicleInfo: v.object({
       vin: v.string(),
       make: v.string(),
@@ -15,12 +14,51 @@ export const create = mutation({
     selectedServices: v.array(v.id('services')),
   },
   handler: async (ctx, args) => {
-    // This is a placeholder.
-    // In a real application, you would create a new assessment in the database.
-    console.log('Creating assessment with args:', args);
-    return {
-      _id: 'assessment1',
+    const user = await getUser(ctx);
+    assertRole(ctx, user, 'client');
+
+    if (!user.orgId) {
+      throw new Error('User does not belong to an organization');
+    }
+
+    const tenant = await ctx.db
+      .query('tenants')
+      .withIndex('by_org_id', (q) => q.eq('orgId', user.orgId as string))
+      .unique();
+
+    if (!tenant) {
+      throw new Error('Tenant not found');
+    }
+
+    await ctx.db.insert('assessments', {
+      tenantId: tenant._id,
       ...args,
-    };
+    });
+  },
+});
+
+export const getAssessments = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getUser(ctx);
+    assertRole(ctx, user, 'detailer');
+
+    if (!user.orgId) {
+      return [];
+    }
+
+    const tenant = await ctx.db
+      .query('tenants')
+      .withIndex('by_org_id', (q) => q.eq('orgId', user.orgId as string))
+      .unique();
+
+    if (!tenant) {
+      return [];
+    }
+
+    return await ctx.db
+      .query('assessments')
+      .withIndex('by_tenant_id', (q) => q.eq('tenantId', tenant._id))
+      .collect();
   },
 });

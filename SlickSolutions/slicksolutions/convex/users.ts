@@ -91,7 +91,7 @@ export const assignRole = mutation({
     }
 
     await ctx.db.patch(targetUser._id, {
-      roles: [...targetUser.roles, role],
+      roles: targetUser.roles.includes(role) ? targetUser.roles : [...targetUser.roles, role],
     });
   },
 });

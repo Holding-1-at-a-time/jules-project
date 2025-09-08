@@ -11,7 +11,9 @@ export const assertRole = (
   }
 };
 
-export const getUser = async (ctx: QueryCtx | MutationCtx) => {
+export const getUser = async (
+  ctx: QueryCtx | MutationCtx | ActionCtx
+): Promise<Doc<'users'>> => {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) {
     throw new Error('User is not authenticated');

@@ -47,4 +47,18 @@ export default defineSchema({
     totalPrice: v.number(),
     // Add other estimate-related fields here
   }).index('by_assessment_id', ['assessmentId']),
+  reviews: defineTable({
+    tenantId: v.id('tenants'),
+    clientId: v.id('clients'),
+    detailerId: v.id('detailers'),
+    assessmentId: v.id('assessments'),
+    rating: v.number(),
+    comment: v.optional(v.string()),
+  }).index('by_tenant_id', ['tenantId'])
+    .index('by_detailer_id', ['detailerId']),
+  themes: defineTable({
+    tenantId: v.id('tenants'),
+    primaryColor: v.string(),
+    secondaryColor: v.string(),
+  }).index('by_tenant_id', ['tenantId']),
 });

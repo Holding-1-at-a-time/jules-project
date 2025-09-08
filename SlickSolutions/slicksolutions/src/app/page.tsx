@@ -42,7 +42,7 @@ export default function Home() {
           >
             <h3 className="text-2xl font-bold">Sign Up &rarr;</h3>
             <p className="mt-4 text-xl">
-              Don't have an account? Sign up today!
+              Don&apos;t have an account? Sign up today!
             </p>
           </Link>
         </div>

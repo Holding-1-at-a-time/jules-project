@@ -21,6 +21,13 @@ import { ClerkProvider } from '@clerk/nextjs'
 
 import ConvexClientProvider from "./ConvexClientProvider";
 
+// This is a placeholder for getting the tenant's theme.
+// In a real app, you would fetch this from the database based on the current tenant.
+const theme = {
+  primaryColor: '#4f46e5',
+  secondaryColor: '#f3f4f6'
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,7 +35,10 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en">
+      <html lang="en" style={{
+        '--primary-color': theme.primaryColor,
+        '--secondary-color': theme.secondaryColor,
+      } as React.CSSProperties}>
         <body
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         >

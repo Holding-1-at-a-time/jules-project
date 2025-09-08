@@ -9,6 +9,12 @@ export const createService = mutation({
     basePrice: v.number(),
   },
   handler: async (ctx, args) => {
+    const name = args.name.trim();
+    if (!name) throw new Error('Service name is required');
+    if (args.description.length > 2_000) throw new Error('Description too long');
+    if (args.basePrice < 0) throw new Error('Base price must be >= 0');
+    // ...rest of handler logic
+  handler: async (ctx, args) => {
     const user = await getUser(ctx);
     assertRole(ctx, user, 'admin');
 

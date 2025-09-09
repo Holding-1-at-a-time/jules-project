@@ -43,13 +43,13 @@ export const createStripeCheckoutSession = action({
     const user = await ctx.auth.getUserIdentity();
 
     if (!user) {
-      throw new Error('You must be logged in to subscribe.');
+      throw new Error('You must be logged in to create a checkout session.');
     }
 
     const dbUser = await ctx.runQuery(internal.users.getUser, { clerkId: user.subject });
 
     if (!dbUser) {
-      throw new Error('User not found.');
+      throw new Error('User not found in database. Please contact support if this issue persists.');
     }
 
     let stripeCustomerId = dbUser.stripeCustomerId;
@@ -97,7 +97,7 @@ export const createStripeCustomerPortalSession = action({
     const dbUser = await ctx.runQuery(internal.users.getUser, { clerkId: user.subject });
 
     if (!dbUser || !dbUser.stripeCustomerId) {
-      throw new Error('User not found or does not have a Stripe customer ID.');
+      throw new Error('Could not find your subscription information. Please contact support if this issue persists.');
     }
 
     const session = await stripe.billingPortal.sessions.create({
@@ -206,7 +206,7 @@ export const stripeWebhook = httpAction(async (ctx, request) => {
     event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
   } catch (err) {
     console.error('Webhook Error:', err);
-    return new Response('Webhook Error', { status: 400 });
+    return new Response(`Webhook Error: ${err instanceof Error ? err.message : 'Unknown error'}`, { status: 400 });
   }
 
   const session = event.data.object as Stripe.Checkout.Session;
@@ -215,7 +215,11 @@ export const stripeWebhook = httpAction(async (ctx, request) => {
   // Handle the event
   switch (event.type) {
     case 'checkout.session.completed':
-      console.log('checkout.session.completed', session);
+      console.log(`[Stripe Webhook] checkout.session.completed: ${session.id}`);
+      if (!session.metadata?.userId) {
+        console.error('Webhook Error: userId not found in session metadata', { sessionId: session.id });
+        break;
+      }
       const completedSession = await stripe.checkout.sessions.retrieve(session.id, {
         expand: ['line_items'],
       });
@@ -231,13 +235,14 @@ export const stripeWebhook = httpAction(async (ctx, request) => {
         break;
       }
       await ctx.runMutation(internal.stripe.fulfillSubscription, {
-        userId: session.metadata!.userId,
+        userId: session.metadata.userId as any,
         subscriptionId: session.subscription as string,
         plan: plan,
       });
+      console.log(`[Stripe Webhook] Fulfilled subscription for user: ${session.metadata.userId}`);
       break;
     case 'customer.subscription.updated':
-      console.log('customer.subscription.updated', subscription);
+      console.log(`[Stripe Webhook] customer.subscription.updated: ${subscription.id}`);
       const updatedPriceId = subscription.items.data[0].price.id;
       const updatedPlan = priceIdToPlan[updatedPriceId];
       if (!updatedPlan) {
@@ -249,22 +254,25 @@ export const stripeWebhook = httpAction(async (ctx, request) => {
         plan: updatedPlan,
         status: subscription.status,
       });
+      console.log(`[Stripe Webhook] Updated subscription for subscription: ${subscription.id}`);
       break;
     case 'customer.subscription.deleted':
-      console.log('customer.subscription.deleted', subscription);
+      console.log(`[Stripe Webhook] customer.subscription.deleted: ${subscription.id}`);
       await ctx.runMutation(internal.stripe.cancelSubscription, {
         subscriptionId: subscription.id,
       });
+      console.log(`[Stripe Webhook] Canceled subscription for subscription: ${subscription.id}`);
       break;
     case 'invoice.payment_failed':
-      console.log('invoice.payment_failed', event.data.object);
+      console.log(`[Stripe Webhook] invoice.payment_failed for subscription: ${subscription.id}`);
       await ctx.runMutation(internal.stripe.handleFailedPayment, {
         subscriptionId: subscription.id,
         status: subscription.status,
       });
+      console.log(`[Stripe Webhook] Handled failed payment for subscription: ${subscription.id}`);
       break;
     default:
-      console.log(`Unhandled event type ${event.type}`);
+      console.log(`[Stripe Webhook] Unhandled event type: ${event.type}`);
   }
 
   return new Response(null, { status: 200 });

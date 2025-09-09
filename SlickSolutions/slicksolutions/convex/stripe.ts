@@ -128,11 +128,6 @@ export const fulfill = httpAction(async (ctx, request) => {
     console.error('Error processing webhook event:', error);
     return new Response('Webhook Error', { status: 400 });
   }
-      break;
-    }
-    default:
-      console.log(`Unhandled event type ${event.type}`);
-  }
 
   return new Response(null, { status: 200 });
 });

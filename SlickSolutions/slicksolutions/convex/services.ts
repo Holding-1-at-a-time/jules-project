@@ -2,63 +2,86 @@ import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
 import { getUser, assertRole } from './auth';
 
-export const createService = mutation({
+/**
+ * Creates a new service for a tenant.
+ * @param tenantId The ID of the tenant.
+ * @param name The name of the service.
+ * @param description The description of the service.
+ * @param basePrice The base price of the service.
+ * @returns The ID of the newly created service.
+ */
+export const create = mutation({
   args: {
+    tenantId: v.id('tenants'),
     name: v.string(),
     description: v.string(),
     basePrice: v.number(),
   },
   handler: async (ctx, args) => {
-    const name = args.name.trim();
-    if (!name) throw new Error('Service name is required');
-    if (args.description.length > 2_000) throw new Error('Description too long');
-    if (args.basePrice < 0) throw new Error('Base price must be >= 0');
-    // ...rest of handler logic
-  handler: async (ctx, args) => {
-    const user = await getUser(ctx);
-    assertRole(ctx, user, 'admin');
-
-    if (!user.orgId) {
-      throw new Error('User does not belong to an organization');
-    }
-
-    const tenant = await ctx.db
-      .query('tenants')
-      .withIndex('by_org_id', (q) => q.eq('orgId', user.orgId as string))
-      .unique();
-
-    if (!tenant) {
-      throw new Error('Tenant not found');
-    }
-
-    await ctx.db.insert('services', {
-      tenantId: tenant._id,
-      ...args,
-    });
+    const serviceId = await ctx.db.insert('services', args);
+    return serviceId;
   },
 });
 
-export const getServices = query({
-  args: {},
-  handler: async (ctx) => {
-    const user = await getUser(ctx);
-
-    if (!user.orgId) {
-      return [];
-    }
-
-    const tenant = await ctx.db
-      .query('tenants')
-      .withIndex('by_org_id', (q) => q.eq('orgId', user.orgId as string))
-      .unique();
-
-    if (!tenant) {
-      return [];
-    }
-
-    return await ctx.db
+/**
+ * Gets all services for a specific tenant.
+ * @param tenantId The ID of the tenant.
+ * @returns A list of services for the tenant.
+ */
+export const getForTenant = query({
+  args: { tenantId: v.id('tenants') },
+  handler: async (ctx, args) => {
+    const services = await ctx.db
       .query('services')
       .withIndex('by_tenant_id', (q) => q.eq('tenantId', args.tenantId))
       .collect();
+    return services;
+  },
+});
+
+/**
+ * Updates an existing service.
+ * @param id The ID of the service to update.
+ * @param tenantId The ID of the tenant.
+ * @param name The new name of the service.
+ * @param description The new description of the service.
+ * @param basePrice The new base price of the service.
+ */
+export const update = mutation({
+  args: {
+    id: v.id('services'),
+    tenantId: v.id('tenants'),
+    name: v.optional(v.string()),
+    description: v.optional(v.string()),
+    basePrice: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const service = await ctx.db.get(args.id);
+    if (service && service.tenantId === args.tenantId) {
+      const { id, tenantId, ...rest } = args;
+      await ctx.db.patch(id, rest);
+    } else {
+      throw new Error('Permission denied.');
+    }
+  },
+});
+
+/**
+ * Deletes a service.
+ * @param id The ID of the service to delete.
+ * @param tenantId The ID of the tenant.
+ */
+export const del = mutation({
+  args: {
+    id: v.id('services'),
+    tenantId: v.id('tenants'),
+  },
+  handler: async (ctx, args) => {
+    const service = await ctx.db.get(args.id);
+    if (service && service.tenantId === args.tenantId) {
+      await ctx.db.delete(args.id);
+    } else {
+      throw new Error('Permission denied.');
+    }
   },
 });

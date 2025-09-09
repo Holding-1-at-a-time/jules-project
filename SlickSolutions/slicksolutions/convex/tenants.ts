@@ -6,83 +6,50 @@ import QRCode from 'qrcode';
 import { getUserAndTenant } from './utils';
 
 /**
- * Get a tenant by ID.
- * This query is protected and will only return the tenant if the user is a member of it.
+] * Creates a new tenant.
+ * @param name The name of the tenant.
+ * @returns The ID of the newly created tenant.
  */
-export const get = query({
-  args: { id: v.id('tenants') },
-  handler: async (ctx, args) => {
-    const { user } = await getUserAndTenant(ctx, {});
-
-    if (user.tenantId !== args.id) {
-      throw new Error('Not authorized to view this tenant');
-    }
-
-    return await ctx.db.get(args.id);
+export const create = mutation({
+  args: {
+    name: v.string(),
   },
-});
-
-/**
- * Generate a QR code for a tenant.
- * This mutation is protected and will only generate a QR code if the user is a member of the tenant.
- */
-export const generateQrCode = mutation({
-  args: { tenantId: v.id('tenants') },
-  handler: async (ctx, { tenantId }) => {
-    const { user } = await getUserAndTenant(ctx, {});
-
-    if (user.tenantId !== tenantId) {
-      throw new Error('Not authorized to generate QR code for this tenant');
-
-const clerk = new Clerk({
-  secretKey: process.env.CLERK_SECRET_KEY,
-});
-
-export const createTenant = mutation({
-  args: { name: v.string() },
-  handler: async (ctx, { name }) => {
-    const user = await getUser(ctx);
-
-    const { id: orgId } = await clerk.organizations.createOrganization({
-      name,
-      createdBy: user.clerkId,
-    });
-
-    if (!orgId) {
-      throw new Error('Failed to create organization in Clerk');
-    }
-
-    await clerk.organizations.createOrganizationMembership({
-      organizationId: orgId,
-      userId: user.clerkId,
-      role: 'org:admin',
-    });
-
-    const tenantId = await ctx.db.insert('tenants', { name, orgId });
-
-    await ctx.db.patch(user._id, {
-      orgId,
-      roles: [...user.roles, 'admin'],
-    });
-
+  handler: async (ctx, args) => {
+    const tenantId = await ctx.db.insert('tenants', { name: args.name });
     return tenantId;
   },
 });
 
+/**
+ * Gets a tenant by their ID.
+ * @param id The ID of the tenant.
+ * @returns The tenant object, or null if not found.
+ */
 export const get = query({
-  args: {},
-  handler: async (ctx) => {
-    const user = await getUser(ctx);
-    if (!user.orgId) {
-      return null;
-    }
-    return await ctx.db
-      .query('tenants')
-      .withIndex('by_org_id', (q) => q.eq('orgId', user.orgId as string))
-      .unique();
+  args: { id: v.id('tenants') },
+  handler: async (ctx, args) => {
+\    const tenant = await ctx.db.get(args.id);
+    return tenant;
   },
 });
 
+/**
+ * Gets all tenants.
+ * @returns A list of all tenants.
+ */
+export const getAll = query({
+  args: {},
+  handler: async (ctx) => {
+    const tenants = await ctx.db.query('tenants').collect();
+    return tenants;
+  },
+});
+
+/**
+ * Generates a QR code for a tenant's assessment page and saves it to the database.
+ * @param tenantId The ID of the tenant.
+ * @returns The data URL of the generated QR code.
+ */
 export const generateQrCode = mutation({
   args: { tenantId: v.id('tenants') },
   handler: async (ctx, { tenantId }) => {

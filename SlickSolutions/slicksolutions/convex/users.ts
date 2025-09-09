@@ -1,107 +1,79 @@
-import { internalMutation, mutation, query } from './_generated/server';
+import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
-import { getUser, assertRole } from './auth';
-// SlickSolutions/slicksolutions/convex/users.ts
 
-import { createClerkClient } from '@clerk/backend';
-
--const clerk = new Clerk({
--  secretKey: process.env.CLERK_SECRET_KEY,
-const clerkSecret = process.env.CLERK_SECRET_KEY;
-if (!clerkSecret) {
-  throw new Error('Missing CLERK_SECRET_KEY');
-}
-const clerkClient = createClerkClient({
-  secretKey: clerkSecret,
-});
-
-// ...later, use clerkClient.organizations.createOrganizationInvitation({...})
-
-export const me = query({
-  args: {},
-  handler: async (ctx) => {
-    return await getUser(ctx);
-  },
-});
-
-export const createOrUpdateUser = internalMutation({
+/**
+ * Creates a new user.
+ * @param clerkId The ID of the user in Clerk.
+ * @param email The email of the user.
+ * @param name The name of the user.
+ * @returns The ID of the newly created user.
+ */
+export const create = mutation({
   args: {
     clerkId: v.string(),
     email: v.string(),
     name: v.string(),
   },
-  handler: async (ctx, { clerkId, email, name }) => {
-    const user = await ctx.db
-      .query('users')
-      .withIndex('by_clerk_id', (q) => q.eq('clerkId', clerkId))
-      .unique();
-
-    if (user) {
-      await ctx.db.patch(user._id, { email, name });
-    } else {
-      await ctx.db.insert('users', {
-        clerkId,
-        email,
-        name,
-        roles: [],
-      });
-    }
+  handler: async (ctx, args) => {
+    const userId = await ctx.db.insert('users', {
+      clerkId: args.clerkId,
+      email: args.email,
+      name: args.name,
+      roles: [],
+    });
+    return userId;
   },
 });
 
-export const deleteUser = internalMutation({
+/**
+ * Gets a user by their Clerk ID.
+ * @param clerkId The ID of the user in Clerk.
+ * @returns The user object, or null if not found.
+ */
+export const get = query({
   args: { clerkId: v.string() },
-  handler: async (ctx, { clerkId }) => {
+  handler: async (ctx, args) => {
     const user = await ctx.db
       .query('users')
-      .withIndex('by_clerk_id', (q) => q.eq('clerkId', clerkId))
+      .withIndex('by_clerk_id', (q) => q.eq('clerkId', args.clerkId))
       .unique();
-
-    if (user) {
-      await ctx.db.delete(user._id);
-    }
+    return user;
   },
 });
 
-export const inviteClient = mutation({
-  args: { email: v.string() },
-  handler: async (ctx, { email }) => {
-    const user = await getUser(ctx);
-    if (!user.roles.includes('admin') && !user.roles.includes('detailer')) {
-      throw new Error('User does not have permission to invite clients');
-    }
-
-    if (!user.orgId) {
-      throw new Error('User does not belong to an organization');
-    }
-
-    await clerk.invitations.createInvitation({
-      emailAddress: email,
-      organizationId: user.orgId,
-      role: 'org:member',
-      redirectUrl: `${process.env.NEXT_PUBLIC_URL}/`,
-    });
+/**
+ * Updates an existing user.
+ * @param id The ID of the user to update.
+ * @param tenantId The new ID of the tenant for the user.
+ * @param roles The new roles for the user.
+ */
+export const update = mutation({
+  args: {
+    id: v.id('users'),
+    tenantId: v.optional(v.id('tenants')),
+    roles: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const { id, ...rest } = args;
+    await ctx.db.patch(id, rest);
   },
 });
 
-export const assignRole = mutation({
-  args: { userId: v.id('users'), role: v.string() },
-  handler: async (ctx, { userId, role }) => {
-    const user = await getUser(ctx);
-    assertRole(ctx, user, 'admin');
-
-    const targetUser = await ctx.db.get(userId);
-    if (!targetUser) {
-      throw new Error('User not found');
+/**
+ * Gets the currently authenticated user.
+ * @returns The user object, or null if not authenticated.
+ */
+export const me = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
     }
-
-    if (targetUser.roles.includes(role)) {
-      // Role already exists, do nothing
-      return;
-    }
-
-    await ctx.db.patch(targetUser._id, {
-      roles: targetUser.roles.includes(role) ? targetUser.roles : [...targetUser.roles, role],
-    });
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerk_id', (q) => q.eq('clerkId', identity.subject))
+      .unique();
+    return user;
   },
 });

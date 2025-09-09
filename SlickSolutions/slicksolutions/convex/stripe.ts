@@ -73,8 +73,8 @@ export const createStripeCheckoutSession = action({
       line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
       customer: stripeCustomerId,
-      success_url: `${process.env.NEXT_PUBLIC_URL}/dashboard?payment=success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_URL}/dashboard?payment=cancelled`,
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?payment=success`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?payment=cancelled`,
       metadata: {
         userId: dbUser._id,
         tenantId: args.tenantId,

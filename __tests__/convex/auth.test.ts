@@ -14,7 +14,6 @@
  *    • DB error propagation from unique()
  *    • identity present but subject undefined -> eq receives undefined
  */
-
 type AnyFn = (...args: any[]) => any;
 
 // Detect runtime
@@ -245,5 +244,123 @@ describe("getUser", () => {
     const user = await getUser(ctx as any);
     expect(user._id).toBe("user_99");
     expect(ctx.instrument.eqCalls).toEqual([["clerkId", undefined]]);
+  });
+});
+
+/**
+ * ------------------------------------------------------------------------
+ * Additional coverage appended on 2025-09-09
+ * Framework note:
+ *   - Repository search attempts to detect Vitest/Jest.
+ *   - This file remains compatible with either runner via runtime detection (vi/jest).
+ * ------------------------------------------------------------------------
+ */
+
+describe("assertRole - additional coverage", () => {
+  it("allows when user has 'admin' role among multiple roles", () => {
+    const user: any = { roles: ["client", "admin"] };
+    const ctx: any = {};
+    expect(() => assertRole(ctx, user, "admin")).not.toThrow();
+  });
+
+  it("throws when user is null", () => {
+    const ctx: any = {};
+    expect(() => assertRole(ctx, null as any, "client")).toThrow();
+  });
+
+  it("throws when roles is not an array", () => {
+    const user: any = { roles: "client" };
+    const ctx: any = {};
+    expect(() => assertRole(ctx, user, "client")).toThrow();
+  });
+
+  it("throws when role exists with different casing (e.g., 'ADMIN' vs 'admin')", () => {
+    const user: any = { roles: ["ADMIN"] };
+    const ctx: any = {};
+    expect(() => assertRole(ctx, user, "admin")).toThrow();
+  });
+
+  it("does not throw if roles contain duplicates and required role is present", () => {
+    const user: any = { roles: ["detailer", "detailer", "client"] };
+    const ctx: any = {};
+    expect(() => assertRole(ctx, user, "detailer")).not.toThrow();
+  });
+});
+
+describe("getUser - additional coverage", () => {
+  it("returns a user when DB result is not provided explicitly (default mock path)", async () => {
+    const ctx = makeCtxMock({ identity: { subject: "sub_default_case" } });
+    const user = await getUser(ctx as any);
+
+    expect(user).toBeTruthy();
+    expect(user.clerkId).toBe("sub_default_case");
+    expect(ctx.instrument.eqCalls).toEqual([["clerkId", "sub_default_case"]]);
+    expect(ctx.instrument.tables).toEqual(["users"]);
+    expect(ctx.instrument.indexes).toEqual(["by_clerk_id"]);
+    expect(ctx.instrument.uniqueCalls).toBe(1);
+  });
+
+  it("rejects and does not touch DB if getUserIdentity throws", async () => {
+    const ctx: Ctx = {
+      instrument: { tables: [], indexes: [], eqCalls: [], uniqueCalls: 0 },
+      auth: { getUserIdentity: async () => { throw new Error("identity provider failure"); } },
+      db: {
+        query: (_table: string) => ({
+          withIndex: (_name: string, _cb: any) => ({
+            unique: async () => {
+              throw new Error("should not be called when auth fails");
+            },
+          }),
+        }),
+      },
+    };
+
+    await expect(getUser(ctx as any)).rejects.toThrowError("identity provider failure");
+    expect(ctx.instrument.tables).toEqual([]);
+    expect(ctx.instrument.indexes).toEqual([]);
+    expect(ctx.instrument.uniqueCalls).toBe(0);
+  });
+
+  it("rejects when identity is undefined (unauthenticated)", async () => {
+    const ctx: Ctx = {
+      instrument: { tables: [], indexes: [], eqCalls: [], uniqueCalls: 0 },
+      auth: { getUserIdentity: async () => undefined as any },
+      db: {
+        query: (_table: string) => ({
+          withIndex: (_name: string, _cb: any) => ({
+            unique: async () => null,
+          }),
+        }),
+      },
+    };
+
+    await expect(getUser(ctx as any)).rejects.toThrowError("User is not authenticated");
+    expect(ctx.instrument.tables).toEqual([]);
+    expect(ctx.instrument.indexes).toEqual([]);
+    expect(ctx.instrument.uniqueCalls).toBe(0);
+  });
+
+  it("passes through non-string subject values (number) unchanged to eq", async () => {
+    const ctx = makeCtxMock({
+      identity: { subject: 12345 as any },
+      userFromDb: { _id: "user_num", clerkId: 12345, roles: ["client"] },
+    });
+
+    const user = await getUser(ctx as any);
+    expect(user._id).toBe("user_num");
+    expect(ctx.instrument.eqCalls).toEqual([["clerkId", 12345]]);
+    expect(ctx.instrument.uniqueCalls).toBe(1);
+  });
+
+  it("handles identity with null subject by passing null to eq", async () => {
+    const ctx = makeCtxMock({
+      identity: { subject: null as any },
+      userFromDb: { _id: "user_null", clerkId: null, roles: ["client"] },
+    });
+
+    const user = await getUser(ctx as any);
+    expect(user._id).toBe("user_null");
+    expect(ctx.instrument.eqCalls).toEqual([["clerkId", null]]);
+    expect(ctx.instrument.uniqueCalls).toBe(1);
   });
 });

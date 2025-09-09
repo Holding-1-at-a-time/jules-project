@@ -63,6 +63,10 @@ export const generateRecommendation = action({
       console.error('Error calling Ollama:', error);
       throw new Error('Failed to get a response from the AI model.');
     }
+
+    if (!data || !data.response) {
+      throw new Error('Invalid response format from AI model');
+    }
     const recommendation = data.response;
 
     // 4. Save recommendation

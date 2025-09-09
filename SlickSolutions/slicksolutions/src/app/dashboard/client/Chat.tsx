@@ -10,6 +10,18 @@ interface ChatProps {
   tenantId: Id<'tenants'>;
 }
 
+/**
+ * Chat UI component that displays and sends messages between a user and an AI assistant.
+ *
+ * Renders a scrollable chat history for the given client and a text input to send new messages.
+ * Fetches conversation history via a query and dispatches messages through a Convex action.
+ * Automatically scrolls to the newest message when history updates. While sending, input and
+ * submit button are disabled. Errors from the send action are not handled inside the component.
+ *
+ * @param clientId - Identifier of the client whose chat history to load.
+ * @param tenantId - Identifier of the tenant context for sending messages.
+ * @returns The chat UI as a JSX element.
+ */
 export default function Chat({ clientId, tenantId }: ChatProps) {
   const chatHistory = useQuery(api.chat.getForClient, { clientId });
   const chatAction = useAction(api.ai.customerConcierge.chat);

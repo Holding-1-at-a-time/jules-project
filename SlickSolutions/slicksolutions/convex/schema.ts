@@ -9,7 +9,7 @@ export default defineSchema({
     // Add other tenant-specific fields here
   }).index('by_org_id', ['orgId']),
   users: defineTable({
-    tenantId: v.id(tenants);
+    tenantId: v.id(tenants),
     name: v.string(),
     email: v.string(),
     clerkId: v.string(), // Clerk user ID

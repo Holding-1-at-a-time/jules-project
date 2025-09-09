@@ -253,3 +253,113 @@ describe('convex/services.getServices', () => {
     expect(out).toEqual(result);
   });
 });
+
+/**
+ * Additional tests appended: boundaries, early validation short-circuiting, and auth enforcement.
+ * Test framework: continues using Jest/Vitest-compatible style already in this file.
+ */
+
+describe('convex/services.createService - boundaries and enforcement (appended)', () => {
+  const baseArgs = {
+    name: '  Premium Detail  ',
+    description: 'Standard service description.',
+    basePrice: 25,
+  };
+
+  beforeEach(() => {
+    resetAll?.();
+    // Ensure auth spies exist and are reset
+    if (!authMod.getUser || !authMod.assertRole) {
+      throw new Error('auth module missing expected exports');
+    }
+    if ((authMod.getUser as any).mockReset) (authMod.getUser as any).mockReset();
+    if ((authMod.assertRole as any).mockReset) (authMod.assertRole as any).mockReset();
+    if (!(authMod.getUser as any).mock) spyOn(authMod, 'getUser').mockImplementation(async () => ({}));
+    if (!(authMod.assertRole as any).mock) spyOn(authMod, 'assertRole').mockImplementation(() => {});
+  });
+
+  test('allows 2000-char description and basePrice = 0 (boundary), inserts once', async () => {
+    const args = { ...baseArgs, description: 'x'.repeat(2000), basePrice: 0 };
+    const { db, spies } = makeDbQueryMock({ tenant: { _id: 'tenant_boundary' } });
+
+    (authMod.getUser as any).mockResolvedValue({ orgId: 'orgBoundary' });
+    (authMod.assertRole as any).mockImplementation((_ctx: any, _user: any, role: string) => {
+      if (role !== 'admin') throw new Error('wrong role');
+    });
+
+    await expect(callConvex(createService, { db } as Ctx, args)).resolves.toBeUndefined();
+
+    expect(spies.insert).toHaveBeenCalledTimes(1);
+    const [table, doc] = spies.insert.mock.calls[0];
+    expect(table).toBe('services');
+    expect(doc).toMatchObject({
+      tenantId: 'tenant_boundary',
+      description: args.description,
+      basePrice: 0,
+      name: args.name, // name remains untrimmed on insert per implementation
+    });
+    expect((doc.description as string).length).toBe(2000);
+  });
+
+  test('rejects when assertRole throws (non-admin user); does not insert', async () => {
+    const { db, spies } = makeDbQueryMock({ tenant: { _id: 'tenant_auth' } });
+    (authMod.getUser as any).mockResolvedValue({ orgId: 'orgAuth' });
+    (authMod.assertRole as any).mockImplementation(() => {
+      throw new Error('Forbidden');
+    });
+
+    await expect(callConvex(createService, { db } as Ctx, baseArgs)).rejects.toThrow('Forbidden');
+    expect(spies.insert).not.toHaveBeenCalled();
+  });
+
+  test('validation short-circuits: description too long -> no auth or db calls', async () => {
+    const { db, spies } = makeDbQueryMock({ tenant: { _id: 'tenant_x' } });
+
+    await expect(
+      callConvex(createService, { db } as Ctx, { ...baseArgs, description: 'y'.repeat(2001) })
+    ).rejects.toThrow('Description too long');
+
+    expect(authMod.getUser).not.toHaveBeenCalled();
+    expect(authMod.assertRole).not.toHaveBeenCalled();
+    expect(spies.query).not.toHaveBeenCalled();
+    expect(spies.insert).not.toHaveBeenCalled();
+  });
+
+  test('validation short-circuits: negative basePrice -> no auth or db calls', async () => {
+    const { db, spies } = makeDbQueryMock({ tenant: { _id: 'tenant_y' } });
+
+    await expect(
+      callConvex(createService, { db } as Ctx, { ...baseArgs, basePrice: -1 })
+    ).rejects.toThrow('Base price must be >= 0');
+
+    expect(authMod.getUser).not.toHaveBeenCalled();
+    expect(authMod.assertRole).not.toHaveBeenCalled();
+    expect(spies.query).not.toHaveBeenCalled();
+    expect(spies.insert).not.toHaveBeenCalled();
+  });
+
+  test('requires user to belong to an organization (null/undefined orgId)', async () => {
+    const { db } = makeDbQueryMock({ tenant: { _id: 'tenant_org' } });
+    (authMod.getUser as any).mockResolvedValue({ orgId: undefined });
+
+    await expect(callConvex(createService, { db } as Ctx, baseArgs)).rejects.toThrow(
+      'User does not belong to an organization'
+    );
+  });
+});
+
+describe('convex/services.getServices - additional (appended)', () => {
+  beforeEach(() => {
+    resetAll?.();
+    if ((authMod.getUser as any).mockReset) (authMod.getUser as any).mockReset();
+    if (!(authMod.getUser as any).mock) spyOn(authMod, 'getUser').mockImplementation(async () => ({}));
+  });
+
+  test('returns [] when tenant exists but has no services', async () => {
+    const { db } = makeDbQueryMock({ tenant: { _id: 'tenant_empty' }, services: [] });
+    (authMod.getUser as any).mockResolvedValue({ orgId: 'orgEmpty' });
+
+    const out = await callConvex(getServices, { db } as Ctx, {});
+    expect(out).toEqual([]);
+  });
+});

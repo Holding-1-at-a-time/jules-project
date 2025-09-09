@@ -233,3 +233,40 @@ describe('convex/users module', () => {
     });
   });
 });
+ // --- Additional test cases appended on 2025-09-09 to strengthen diff coverage ---
+ describe('convex/users module – additional edge cases', () => {
+   const importUsers = async () => await import('../../convex/users');
+
+   // Access mocks defined earlier in the file (assumes existing suite structure)
+   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   const jestLocal: any = (globalThis as any).jest ?? (globalThis as any).vi;
+   // Pull previously-declared symbols if present
+   // @ts-ignore
+   const createOrganizationInvitationMock = (globalThis as any).createOrganizationInvitationMock || (jestLocal && jestLocal.fn && jestLocal.fn());
+
+   test('inviteClient bubbles up Clerk API errors', async () => {
+     // Reuse getUser and helpers from existing tests
+     const { getUser } = await import('../../convex/auth');
+     (getUser as any).mockResolvedValueOnce({ _id: 'u', clerkId: 'c', email: 'e', name: 'n', roles: ['admin'], orgId: 'org_42' });
+     if (createOrganizationInvitationMock && createOrganizationInvitationMock.mockRejectedValueOnce) {
+       createOrganizationInvitationMock.mockRejectedValueOnce(new Error('Clerk unavailable'));
+     }
+     const { inviteClient } = await import('../../convex/users');
+     // Minimal ctx
+     const ctx: any = { db: { } };
+     await expect(inviteClient.handler(ctx, { email: 'client@example.com' }))
+       .rejects.toThrow(/Clerk unavailable/);
+   });
+
+   test('assignRole denies when assertRole fails', async () => {
+     const authMod = await import('../../convex/auth');
+     (authMod.getUser as any).mockResolvedValueOnce({ _id: 'u', roles: [] });
+     (authMod.assertRole as any).mockImplementationOnce(() => { throw new Error('Forbidden'); });
+
+     const db: any = { get: jestLocal.fn().mockResolvedValueOnce({ _id: 't1', roles: [] }), patch: jestLocal.fn() };
+     const { assignRole } = await import('../../convex/users');
+     await expect(assignRole.handler({ db }, { userId: 't1' as any, role: 'detailer' }))
+       .rejects.toThrow(/Forbidden/);
+     expect(db.patch).not.toHaveBeenCalled();
+   });
+ });

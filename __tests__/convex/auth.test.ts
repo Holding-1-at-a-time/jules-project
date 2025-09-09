@@ -247,3 +247,94 @@ describe("getUser", () => {
     expect(ctx.instrument.eqCalls).toEqual([["clerkId", undefined]]);
   });
 });
+
+/**
+ * Additional tests appended by CodeRabbit Inc on 2025-09-09.
+ * Note: Repository uses a Jest/Vitest-style test runner; these tests are runner-agnostic.
+ * They reuse the same helpers and imports defined above.
+ */
+describe("assertRole - additional scenarios", () => {
+  it("does not throw when roles contain duplicates including the required role", () => {
+    const ctx: any = {};
+    const user: any = { roles: ["client", "admin", "admin"] };
+    expect(() => assertRole(ctx, user, "admin")).not.toThrow();
+  });
+
+  it("throws when user is null", () => {
+    const ctx: any = {};
+    // @ts-expect-error intentional malformed input
+    expect(() => assertRole(ctx, null as any, "client")).toThrow();
+  });
+
+  it("throws when roles array has non-string values and lacks the required role", () => {
+    const ctx: any = {};
+    const user: any = { roles: [null, 0, false] };
+    expect(() => assertRole(ctx, user, "client")).toThrow();
+  });
+});
+
+describe("getUser - additional scenarios", () => {
+  it("propagates errors from auth.getUserIdentity() and does not touch the DB", async () => {
+    const ctx: Ctx = {
+      instrument: { tables: [], indexes: [], eqCalls: [], uniqueCalls: 0 },
+      auth: {
+        getUserIdentity: async () => {
+          throw new Error("auth unavailable");
+        },
+      },
+      db: {
+        query: (table: string) => {
+          // If the DB is touched when auth fails, make it obvious
+          (ctx.instrument.tables as string[]).push(table);
+          throw new Error("DB should not be touched when auth fails");
+        },
+      } as any,
+    };
+
+    await expect(getUser(ctx as any)).rejects.toThrowError("auth unavailable");
+    expect(ctx.instrument.tables.length).toBe(0);
+    expect(ctx.instrument.indexes.length).toBe(0);
+    expect(ctx.instrument.uniqueCalls).toBe(0);
+  });
+
+  it("passes null subject to eq('clerkId', null) and returns the user", async () => {
+    const returned = { _id: "user_null", clerkId: null, roles: ["client"] };
+    const ctx = makeCtxMock({
+      identity: { subject: null as any },
+      userFromDb: returned,
+    });
+
+    const user = await getUser(ctx as any);
+    expect(user).toBe(returned);
+    expect(ctx.instrument.eqCalls).toEqual([["clerkId", null]]);
+    expect(ctx.instrument.tables).toEqual(["users"]);
+    expect(ctx.instrument.indexes).toEqual(["by_clerk_id"]);
+    expect(ctx.instrument.uniqueCalls).toBe(1);
+  });
+
+  it("supports non-string subjects (e.g., number) and wires it through to eq", async () => {
+    const returned = { _id: "user_num", clerkId: 123, roles: ["client"] };
+    const ctx = makeCtxMock({
+      identity: { subject: 123 as any },
+      userFromDb: returned,
+    });
+
+    const user = await getUser(ctx as any);
+    expect(user).toEqual(returned);
+    expect(ctx.instrument.eqCalls).toEqual([["clerkId", 123]]);
+    expect(ctx.instrument.tables).toEqual(["users"]);
+    expect(ctx.instrument.indexes).toEqual(["by_clerk_id"]);
+    expect(ctx.instrument.uniqueCalls).toBe(1);
+  });
+
+  it("returns the exact object provided by the DB (no cloning/mutation)", async () => {
+    const raw = { _id: "user_ref", clerkId: "sub_ref", roles: ["client"] };
+    const ctx = makeCtxMock({
+      identity: { subject: "sub_ref" },
+      userFromDb: raw,
+    });
+
+    const user = await getUser(ctx as any);
+    expect(user).toBe(raw);
+  });
+});

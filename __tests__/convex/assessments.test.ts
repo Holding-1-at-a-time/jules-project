@@ -219,3 +219,125 @@ describe('assessments convex functions', () => {
     });
   });
 });
+
+/**
+ * Additional coverage appended:
+ * Framework: Jest
+ * Focus: index filter callbacks, empty results, and DB error propagation.
+ */
+
+describe('createAssessment.mutation - index filters and edge cases (appended)', () => {
+  const makeArgs = () => ({
+    clientId: id('users', 'client999'),
+    vehicleInfo: {
+      vin: 'SAMPLEVIN123456789',
+      make: 'Toyota',
+      model: 'Corolla',
+      year: 2018,
+    },
+    selectedServices: [id('services', 'svcX')],
+  });
+
+  test('uses withIndex filter q.eq("orgId", user.orgId) for tenant lookup', async () => {
+    const db = makeDbMocks();
+    const ctx: any = { db };
+    const user = { _id: id('users', 'u-index'), role: 'client', orgId: 'org-fil-1' };
+    const tenant: Doc<'tenants'> = { _id: id('tenants', 't-filter') };
+    mockGetUser.mockResolvedValueOnce(user);
+    mockAssertRole.mockImplementation(() => {});
+    db.unique.mockResolvedValueOnce(tenant);
+
+    await createAssessment.handler(ctx, makeArgs());
+
+    expect(db.withIndex).toHaveBeenCalledWith('by_org_id', expect.any(Function));
+    const filter = db.withIndex.mock.calls[0][1];
+    const q = { eq: jest.fn() };
+    // Invoke the predicate to assert it filters by orgId
+    filter(q as any);
+    expect(q.eq).toHaveBeenCalledWith('orgId', user.orgId);
+  });
+
+  test('propagates db.insert errors', async () => {
+    const db = makeDbMocks();
+    const ctx: any = { db };
+    const tenant: Doc<'tenants'> = { _id: id('tenants', 't-ins-err') };
+    mockGetUser.mockResolvedValueOnce({ _id: id('users', 'u-ins-err'), role: 'client', orgId: 'org-ins' });
+    mockAssertRole.mockImplementation(() => {});
+    db.unique.mockResolvedValueOnce(tenant);
+    db.insert.mockRejectedValueOnce(new Error('Insert failed'));
+
+    await expect(createAssessment.handler(ctx, makeArgs())).rejects.toThrow('Insert failed');
+    // Ensure insert was attempted exactly once
+    expect(db.insert).toHaveBeenCalledTimes(1);
+  });
+
+  test('allows empty selectedServices array', async () => {
+    const db = makeDbMocks();
+    const ctx: any = { db };
+    const tenant: Doc<'tenants'> = { _id: id('tenants', 't-empty') };
+    mockGetUser.mockResolvedValueOnce({ _id: id('users', 'u-empty'), role: 'client', orgId: 'org-empty' });
+    mockAssertRole.mockImplementation(() => {});
+    db.unique.mockResolvedValueOnce(tenant);
+
+    const args = { ...makeArgs(), selectedServices: [] as Id[] };
+
+    await expect(createAssessment.handler(ctx, args)).resolves.toBeUndefined();
+    expect(db.insert).toHaveBeenCalledWith(
+      'assessments',
+      expect.objectContaining({
+        tenantId: tenant._id,
+        selectedServices: [],
+      }),
+    );
+  });
+});
+
+describe('getAssessments.query - index filters and failure cases (appended)', () => {
+  test('uses withIndex filter q.eq("tenantId", tenant._id) for assessments lookup', async () => {
+    const db = makeDbMocks();
+    const ctx: any = { db };
+    const tenant: Doc<'tenants'> = { _id: id('tenants', 't-filter-2') };
+    const rows: any[] = [];
+    mockGetUser.mockResolvedValueOnce({ _id: id('users', 'u-det'), role: 'detailer', orgId: 'org-fil-2' });
+    mockAssertRole.mockImplementation(() => {});
+    db.unique.mockResolvedValueOnce(tenant);
+    db.collect.mockResolvedValueOnce(rows);
+
+    await expect(getAssessments.handler(ctx, {})).resolves.toEqual(rows);
+
+    expect(db.withIndex).toHaveBeenCalledWith('by_tenant_id', expect.any(Function));
+    const byTenantCall = db.withIndex.mock.calls.find((c: any[]) => c[0] === 'by_tenant_id');
+    expect(byTenantCall).toBeTruthy();
+    const tenantIdFilter = byTenantCall?.[1] as Function;
+    const q = { eq: jest.fn() };
+    tenantIdFilter(q as any);
+    expect(q.eq).toHaveBeenCalledWith('tenantId', tenant._id);
+  });
+
+  test('returns [] when tenant exists but no assessments', async () => {
+    const db = makeDbMocks();
+    const ctx: any = { db };
+    const tenant: Doc<'tenants'> = { _id: id('tenants', 't-empty-2') };
+    mockGetUser.mockResolvedValueOnce({ _id: id('users', 'u-empty-2'), role: 'detailer', orgId: 'org-empt' });
+    mockAssertRole.mockImplementation(() => {});
+    db.unique.mockResolvedValueOnce(tenant);
+    db.collect.mockResolvedValueOnce([]);
+
+    await expect(getAssessments.handler(ctx, {})).resolves.toEqual([]);
+    expect(db.collect).toHaveBeenCalledTimes(1);
+  });
+
+  test('propagates db.collect errors', async () => {
+    const db = makeDbMocks();
+    const ctx: any = { db };
+    const tenant: Doc<'tenants'> = { _id: id('tenants', 't-err-collect') };
+    mockGetUser.mockResolvedValueOnce({ _id: id('users', 'u-err-collect'), role: 'detailer', orgId: 'org-ec' });
+    mockAssertRole.mockImplementation(() => {});
+    db.unique.mockResolvedValueOnce(tenant);
+    db.collect.mockRejectedValueOnce(new Error('DB collect failed'));
+
+    await expect(getAssessments.handler(ctx, {})).rejects.toThrow('DB collect failed');
+    // Ensure assessments query was attempted
+    expect(db.query).toHaveBeenNthCalledWith(2, 'assessments');
+  });
+});

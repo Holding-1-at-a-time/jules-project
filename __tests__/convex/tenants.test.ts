@@ -236,3 +236,139 @@ describe('convex/tenants server functions', () => {
     });
   });
 });
+/**
+ * Additional edge-case and failure-path tests.
+ * Detected testing framework: Jest (+ ts-jest). These tests reuse existing mocks and module wiring.
+ * We purposely do not re-mock modules here to avoid duplicate mock declarations.
+ */
+
+describe('convex/tenants server functions - additional cases', () => {
+  // Local ctx for this describe; reuse the same DB surface mocked in the original suite.
+  let ctx: { db: { insert: jest.Mock, patch: jest.Mock, get: jest.Mock, query: jest.Mock<any, any> } };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    // Provide a fresh ctx.db mock each test with the chained query().withIndex().unique() API.
+    const unique = jest.fn();
+    const withIndex = jest.fn().mockReturnValue({ unique });
+    const query = jest.fn().mockReturnValue({ withIndex });
+
+    ctx = {
+      db: {
+        insert: jest.fn(),
+        patch: jest.fn(),
+        get: jest.fn(),
+        query,
+      },
+    };
+  });
+
+  describe('createTenant - edge cases', () => {
+    test('propagates Clerk.createOrganization errors and avoids any DB writes', async () => {
+      const user = { _id: 'uX', clerkId: 'user_123', roles: [] };
+      (getUser as jest.Mock).mockResolvedValue(user);
+
+      const clerkInstance = Clerk();
+      (clerkInstance.organizations.createOrganization as jest.Mock)
+        .mockRejectedValue(new Error('clerk org failure'));
+
+      await expect(tenantsMod.createTenant(ctx, { name: 'BadCo' }))
+        .rejects.toThrow('clerk org failure');
+
+      expect(clerkInstance.organizations.createOrganizationMembership).not.toHaveBeenCalled();
+      expect(ctx.db.insert).not.toHaveBeenCalled();
+      expect(ctx.db.patch).not.toHaveBeenCalled();
+    });
+
+    test('propagates Clerk.createOrganizationMembership errors and avoids DB writes', async () => {
+      const user = { _id: 'uY', clerkId: 'user_456', roles: [] };
+      (getUser as jest.Mock).mockResolvedValue(user);
+
+      const clerkInstance = Clerk();
+      (clerkInstance.organizations.createOrganization as jest.Mock)
+        .mockResolvedValue({ id: 'org_edge' });
+      (clerkInstance.organizations.createOrganizationMembership as jest.Mock)
+        .mockRejectedValue(new Error('membership failure'));
+
+      await expect(tenantsMod.createTenant(ctx, { name: 'Edge LLC' }))
+        .rejects.toThrow('membership failure');
+
+      expect(ctx.db.insert).not.toHaveBeenCalled();
+      expect(ctx.db.patch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('get - additional cases', () => {
+    test('returns null when unique() resolves to null (no tenant for org)', async () => {
+      (getUser as jest.Mock).mockResolvedValue({ _id: 'u1', clerkId: 'c1', roles: [], orgId: 'org_none' });
+
+      const unique = jest.fn().mockResolvedValue(null);
+      const withIndex = jest.fn().mockReturnValue({ unique });
+      (ctx.db.query as jest.Mock).mockReturnValue({ withIndex });
+
+      const result = await tenantsMod.get(ctx, {});
+      expect(ctx.db.query).toHaveBeenCalledWith('tenants');
+      expect(withIndex).toHaveBeenCalledWith('by_org_id', expect.any(Function));
+      expect(unique).toHaveBeenCalled();
+      expect(result).toBeNull();
+    });
+
+    test('propagates rejection if unique() rejects (DB error)', async () => {
+      (getUser as jest.Mock).mockResolvedValue({ _id: 'u1', clerkId: 'c1', roles: [], orgId: 'org_abc' });
+
+      const unique = jest.fn().mockRejectedValue(new Error('db unique failure'));
+      const withIndex = jest.fn().mockReturnValue({ unique });
+      (ctx.db.query as jest.Mock).mockReturnValue({ withIndex });
+
+      await expect(tenantsMod.get(ctx, {})).rejects.toThrow('db unique failure');
+    });
+  });
+
+  describe('generateQrCode - error paths', () => {
+    test('throws when assertRole denies access and avoids DB/QR operations', async () => {
+      (getUser as jest.Mock).mockResolvedValue({ _id: 'u1', clerkId: 'c1', roles: ['member'], orgId: 'org_abc' });
+      (assertRole as jest.Mock).mockImplementation(() => { throw new Error('unauthorized'); });
+
+      await expect(tenantsMod.generateQrCode(ctx, { tenantId: 'tenant_forbidden' }))
+        .rejects.toThrow('unauthorized');
+
+      expect(ctx.db.get).not.toHaveBeenCalled();
+      expect(QRCode.toDataURL).not.toHaveBeenCalled();
+      expect(ctx.db.patch).not.toHaveBeenCalled();
+    });
+
+    test('propagates QRCode.toDataURL error and does not patch DB', async () => {
+      (getUser as jest.Mock).mockResolvedValue({ _id: 'u1', clerkId: 'c1', roles: ['admin'], orgId: 'org_abc' });
+      (assertRole as jest.Mock).mockImplementation(() => { /* allowed */ });
+
+      const tenantId = 'tenant_qr_err';
+      (ctx.db.get as jest.Mock).mockResolvedValue({ _id: tenantId, orgId: 'org_abc', name: 'Acme' });
+      (QRCode.toDataURL as jest.Mock).mockRejectedValue(new Error('qr failure'));
+
+      await expect(tenantsMod.generateQrCode(ctx, { tenantId }))
+        .rejects.toThrow('qr failure');
+
+      expect(ctx.db.get).toHaveBeenCalledWith(tenantId);
+      expect(QRCode.toDataURL).toHaveBeenCalledWith(`/assessment/${tenantId}`);
+      expect(ctx.db.patch).not.toHaveBeenCalled();
+    });
+
+    test('propagates DB patch error after QR generation', async () => {
+      (getUser as jest.Mock).mockResolvedValue({ _id: 'u1', clerkId: 'c1', roles: ['admin'], orgId: 'org_abc' });
+      (assertRole as jest.Mock).mockImplementation(() => { /* allowed */ });
+
+      const tenantId = 'tenant_patch_err';
+      (ctx.db.get as jest.Mock).mockResolvedValue({ _id: tenantId, orgId: 'org_abc', name: 'Acme' });
+      (QRCode.toDataURL as jest.Mock).mockResolvedValue('data:image/png;base64,FAKE_PLUS');
+      (ctx.db.patch as jest.Mock).mockRejectedValue(new Error('patch failure'));
+
+      await expect(tenantsMod.generateQrCode(ctx, { tenantId }))
+        .rejects.toThrow('patch failure');
+
+      expect(ctx.db.get).toHaveBeenCalledWith(tenantId);
+      expect(QRCode.toDataURL).toHaveBeenCalledWith(`/assessment/${tenantId}`);
+      expect(ctx.db.patch).toHaveBeenCalledWith(tenantId, { qrCode: 'data:image/png;base64,FAKE_PLUS' });
+    });
+  });
+});

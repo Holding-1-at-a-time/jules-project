@@ -1,6 +1,6 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
-import { getUserAndTenant } from './utils';
+import { api } from './_generated/api';
 
 /**
  * Creates a new assessment.
@@ -61,5 +61,19 @@ export const getForClient = query({
       .withIndex('by_client_id', (q) => q.eq('clientId', args.clientId))
       .collect();
     return assessments;
+  },
+});
+
+export const getForClient = query({
+  args: {
+    clientId: v.id('clients'),
+    tenantId: v.id('tenants'),
+  },
+  handler: async (ctx, { clientId, tenantId }) => {
+    return await ctx.db
+      .query('assessments')
+      .withIndex('by_tenant_id', (q) => q.eq('tenantId', tenantId))
+      .filter((q) => q.eq(q.field('clientId'), clientId))
+      .collect();
   },
 });

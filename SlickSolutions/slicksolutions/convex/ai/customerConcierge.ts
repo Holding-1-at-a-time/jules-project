@@ -1,7 +1,6 @@
 import { action } from '../_generated/server';
 import { v } from 'convex/values';
 import { api } from '../_generated/api';
-
 const OLLAMA_ENDPOINT = 'http://localhost:11434/api/generate';
 const OLLAMA_MODEL = 'llama3';
 

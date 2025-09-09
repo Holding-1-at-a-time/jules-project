@@ -9,14 +9,16 @@ export default defineSchema({
     // Add other tenant-specific fields here
   }).index('by_org_id', ['orgId']),
   users: defineTable({
+    tenantId: v.id(tenants);
     name: v.string(),
     email: v.string(),
     clerkId: v.string(), // Clerk user ID
-    orgId: v.optional(v.string()), // Clerk organization ID
+    orgId: v.string(), // Clerk organization ID
     roles: v.array(v.string()), // e.g., ['admin', 'detailer', 'client']
   })
     .index('by_clerk_id', ['clerkId'])
     .index('by_tenant_id', ['tenantId']),
+      
   detailers: defineTable({
     userId: v.id('users'),
     tenantId: v.id('tenants'),
@@ -24,6 +26,7 @@ export default defineSchema({
   })
     .index('by_user_id', ['userId'])
     .index('by_tenant_id', ['tenantId']),
+      
   clients: defineTable({
     userId: v.id('users'),
     tenantId: v.id('tenants'),

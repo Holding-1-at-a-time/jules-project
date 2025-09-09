@@ -1,5 +1,6 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
+import { getUserAndTenant } from './utils';
 
 /**
  * Creates a new assessment.
@@ -12,8 +13,7 @@ import { v } from 'convex/values';
  */
 export const create = mutation({
   args: {
-    tenantId: v.id('tenants'),
-    clientId: v.id('clients'),
+    clientId: v.id('users'),
     vehicleInfo: v.object({
       vin: v.string(),
       make: v.string(),

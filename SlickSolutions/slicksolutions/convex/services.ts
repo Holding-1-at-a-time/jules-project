@@ -1,5 +1,6 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
+import { getUser, assertRole } from './auth';
 
 /**
  * Creates a new service for a tenant.

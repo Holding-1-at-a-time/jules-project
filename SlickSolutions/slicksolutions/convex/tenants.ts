@@ -1,9 +1,12 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
+import { getUser, assertRole } from './auth';
+import { Clerk } from '@clerk/clerk-sdk-node';
 import QRCode from 'qrcode';
+import { getUserAndTenant } from './utils';
 
 /**
- * Creates a new tenant.
+] * Creates a new tenant.
  * @param name The name of the tenant.
  * @returns The ID of the newly created tenant.
  */
@@ -25,7 +28,7 @@ export const create = mutation({
 export const get = query({
   args: { id: v.id('tenants') },
   handler: async (ctx, args) => {
-    const tenant = await ctx.db.get(args.id);
+\    const tenant = await ctx.db.get(args.id);
     return tenant;
   },
 });
@@ -50,10 +53,17 @@ export const getAll = query({
 export const generateQrCode = mutation({
   args: { tenantId: v.id('tenants') },
   handler: async (ctx, { tenantId }) => {
+    const user = await getUser(ctx);
+    assertRole(ctx, user, 'admin');
+
+    const tenant = await ctx.db.get(tenantId);
+    if (!tenant || tenant.orgId !== user.orgId) {
+      throw new Error('Tenant not found or access denied');
+    }
+
     const assessmentUrl = `/assessment/${tenantId}`;
     const qrCodeDataUrl = await QRCode.toDataURL(assessmentUrl);
 
-    // Store the QR code in the database
     await ctx.db.patch(tenantId, { qrCode: qrCodeDataUrl });
 
     return qrCodeDataUrl;

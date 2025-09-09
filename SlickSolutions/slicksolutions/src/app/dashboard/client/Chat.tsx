@@ -3,7 +3,7 @@
 import { useQuery, useAction } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
 import { FormEvent, useState, useRef, useEffect } from 'react';
-import { Id } from '../../../../convex/_generated/dataModel';
+import { Id } from '../convex/_generated/dataModel';
 
 interface ChatProps {
   clientId: Id<'clients'>;

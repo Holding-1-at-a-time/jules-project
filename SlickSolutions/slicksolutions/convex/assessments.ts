@@ -1,8 +1,12 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
-import { getUser, assertRole } from './auth';
+import { getUserAndTenant } from './utils';
 
-export const createAssessment = mutation({
+/**
+ * Create a new assessment.
+ * This mutation is protected and will only create an assessment for the tenant that the user is a member of.
+ */
+export const create = mutation({
   args: {
     clientId: v.id('users'),
     vehicleInfo: v.object({

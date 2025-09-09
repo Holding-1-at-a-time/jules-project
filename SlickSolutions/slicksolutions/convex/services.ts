@@ -58,7 +58,7 @@ export const getServices = query({
 
     return await ctx.db
       .query('services')
-      .withIndex('by_tenant_id', (q) => q.eq('tenantId', tenant._id))
+      .withIndex('by_tenant_id', (q) => q.eq('tenantId', args.tenantId))
       .collect();
   },
 });

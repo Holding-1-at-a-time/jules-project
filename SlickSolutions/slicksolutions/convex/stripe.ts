@@ -73,8 +73,8 @@ export const createStripeCheckoutSession = action({
       line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
       customer: stripeCustomerId,
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?payment=success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?payment=cancelled`,
+      success_url: `${process.env.NEXT_PUBLIC_URL}/dashboard?payment=success`,
+      cancel_url: `${process.env.NEXT_PUBLIC_URL}/dashboard?payment=cancelled`,
       metadata: {
         userId: dbUser._id,
         tenantId: args.tenantId,
@@ -209,12 +209,10 @@ export const stripeWebhook = httpAction(async (ctx, request) => {
     return new Response(`Webhook Error: ${err instanceof Error ? err.message : 'Unknown error'}`, { status: 400 });
   }
 
-  const session = event.data.object as Stripe.Checkout.Session;
-  const subscription = event.data.object as Stripe.Subscription;
-
   // Handle the event
   switch (event.type) {
-    case 'checkout.session.completed':
+    case 'checkout.session.completed': {
+      const session = event.data.object as Stripe.Checkout.Session;
       console.log(`[Stripe Webhook] checkout.session.completed: ${session.id}`);
       if (!session.metadata?.userId) {
         console.error('Webhook Error: userId not found in session metadata', { sessionId: session.id });
@@ -241,7 +239,9 @@ export const stripeWebhook = httpAction(async (ctx, request) => {
       });
       console.log(`[Stripe Webhook] Fulfilled subscription for user: ${session.metadata.userId}`);
       break;
-    case 'customer.subscription.updated':
+    }
+    case 'customer.subscription.updated': {
+      const subscription = event.data.object as Stripe.Subscription;
       console.log(`[Stripe Webhook] customer.subscription.updated: ${subscription.id}`);
       const updatedPriceId = subscription.items.data[0].price.id;
       const updatedPlan = priceIdToPlan[updatedPriceId];
@@ -256,23 +256,41 @@ export const stripeWebhook = httpAction(async (ctx, request) => {
       });
       console.log(`[Stripe Webhook] Updated subscription for subscription: ${subscription.id}`);
       break;
-    case 'customer.subscription.deleted':
+    }
+    case 'customer.subscription.deleted': {
+      const subscription = event.data.object as Stripe.Subscription;
       console.log(`[Stripe Webhook] customer.subscription.deleted: ${subscription.id}`);
       await ctx.runMutation(internal.stripe.cancelSubscription, {
         subscriptionId: subscription.id,
       });
       console.log(`[Stripe Webhook] Canceled subscription for subscription: ${subscription.id}`);
       break;
-    case 'invoice.payment_failed':
-      console.log(`[Stripe Webhook] invoice.payment_failed for subscription: ${subscription.id}`);
-      await ctx.runMutation(internal.stripe.handleFailedPayment, {
-        subscriptionId: subscription.id,
-        status: subscription.status,
-      });
-      console.log(`[Stripe Webhook] Handled failed payment for subscription: ${subscription.id}`);
+    }
+    case 'invoice.payment_failed': {
+      const invoice = event.data.object as Stripe.Invoice;
+      const subscriptionId = invoice.subscription;
+
+      if (typeof subscriptionId !== 'string') {
+        console.error('Webhook Error: invoice.payment_failed event without a subscription ID', { invoiceId: invoice.id });
+        break;
+      }
+
+      console.log(`[Stripe Webhook] invoice.payment_failed for subscription: ${subscriptionId}`);
+      try {
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        await ctx.runMutation(internal.stripe.handleFailedPayment, {
+          subscriptionId: subscription.id,
+          status: subscription.status,
+        });
+        console.log(`[Stripe Webhook] Handled failed payment for subscription: ${subscription.id}`);
+      } catch (error) {
+        console.error(`Error retrieving subscription ${subscriptionId}:`, error);
+      }
       break;
-    default:
+    }
+    default: {
       console.log(`[Stripe Webhook] Unhandled event type: ${event.type}`);
+    }
   }
 
   return new Response(null, { status: 200 });

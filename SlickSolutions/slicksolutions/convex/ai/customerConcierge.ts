@@ -1,8 +1,15 @@
 import { action } from '../_generated/server';
 import { v } from 'convex/values';
 import { api } from '../_generated/api';
-const OLLAMA_ENDPOINT = 'http://localhost:11434/api/generate';
-const OLLAMA_MODEL = 'llama3';
+import { Ollama, StreamingTextResponse } from 'ai';
+import { createAppointmentTool, updateClientInfoTool } from './tools';
+
+const OLLAMA_ENDPOINT = process.env.OLLAMA_ENDPOINT || 'http://localhost:11434';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3';
+
+const ollama = new Ollama({
+  baseURL: OLLAMA_ENDPOINT,
+});
 
 // The main entry point for the AI Customer Concierge
 export const chat = action({
@@ -44,26 +51,58 @@ export const chat = action({
 
       The user said: "${message}"
 
-      Please provide a helpful and friendly response.
+      Please provide a helpful and friendly response. You have access to the following tools:
+      - createAppointment: Create a new appointment for a client.
+      - updateClientInfo: Update a client's information.
     `;
 
-    const response = await fetch(OLLAMA_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: OLLAMA_MODEL,
-        prompt,
-      }),
+    const { stream, messages } = await ollama.chat({
+      model: OLLAMA_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      stream: true,
+      tools: [createAppointmentTool, updateClientInfoTool],
+      tool_choice: 'auto',
     });
 
-    if (!response.ok) {
-      throw new Error(`Ollama request failed with status ${response.status}`);
+    let aiResponse = '';
+    const toolCalls = [];
+    for await (const chunk of stream) {
+      if (chunk.type === 'tool_call') {
+        toolCalls.push(chunk);
+      }
+      aiResponse += chunk.delta || '';
     }
 
-    const ollamaResponse = await response.json();
-    const aiResponse = ollamaResponse.response;
+    if (toolCalls.length > 0) {
+      const toolCallResults = [];
+      for (const toolCall of toolCalls) {
+        const { toolName, args } = toolCall;
+        let result;
+        if (toolName === 'createAppointment') {
+          result = await ctx.runMutation(api.appointments.create, args);
+        } else if (toolName === 'updateClientInfo') {
+          result = await ctx.runMutation(api.clients.update, args);
+        }
+        toolCallResults.push(result);
+      }
+      const newResponse = await ollama.chat({
+        model: OLLAMA_MODEL,
+        messages: [...messages, { role: 'tool', content: JSON.stringify(toolCallResults) }],
+        stream: true,
+      });
+      // Save the AI's response to the chat history
+      const [stream1, stream2] = newResponse.stream.tee();
+      let finalResponse = '';
+      for await (const chunk of stream1) {
+        finalResponse += chunk.delta;
+      }
+      await ctx.runMutation(api.chatHistory.add, {
+        userId: user._id,
+        userMessage: message,
+        aiResponse: finalResponse,
+      });
+      return new StreamingTextResponse(stream2);
+    }
 
     await ctx.runMutation(api.chatHistory.add, {
       userId: user._id,
@@ -71,6 +110,6 @@ export const chat = action({
       aiResponse,
     });
 
-    return aiResponse;
+    return new StreamingTextResponse(stream);
   },
 });

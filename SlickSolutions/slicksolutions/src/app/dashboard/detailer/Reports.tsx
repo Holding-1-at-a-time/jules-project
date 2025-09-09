@@ -4,6 +4,25 @@ import { useState } from 'react';
 import { useLazyQuery, useQuery, useAction } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
 
+/**
+ * Renders a UI for generating and downloading tenant-scoped custom reports.
+ *
+ * The component lets a signed-in user pick a start date, end date, and one or more data points,
+ * then generate a report via a Convex lazy query and optionally download the result as a CSV
+ * via a Convex action. It guards operations if there is no authenticated user or tenantId.
+ *
+ * Behavior:
+ * - Maintains local state for start/end dates, selected data points, generated report data, and a loading flag.
+ * - Calls `api.reports.generate` (lazy query) to fetch report data and displays the results in a simple table.
+ * - Calls `api.reports.generateCsv` (action) to obtain a CSV string, creates a Blob, and triggers a browser download named `report.csv`.
+ *
+ * UI notes:
+ * - Inputs: Start Date, End Date (date inputs), and a multi-select for data points (defaults to `['revenue', 'booking_count']`).
+ * - "Generate Report" button is disabled while a report is being generated and shows a loading state.
+ * - When report data is present, column headers are derived from the report object's keys; a single-row summary of values is shown.
+ *
+ * @returns A React element that renders the reports UI.
+ */
 export default function Reports() {
   const user = useQuery(api.users.me);
   const [startDate, setStartDate] = useState('');

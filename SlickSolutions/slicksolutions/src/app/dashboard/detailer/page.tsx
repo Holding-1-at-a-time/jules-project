@@ -5,6 +5,21 @@ import { api } from '../../../../convex/_generated/api';
 import QrCodeDisplay from '@/components/dashboard/QrCodeDisplay';
 import Reports from './Reports';
 
+/**
+ * Detailer dashboard page component.
+ *
+ * Renders the Detailer Dashboard UI, loads the current user and their tenant via Convex queries,
+ * and exposes a control to generate a tenant QR code via a Convex mutation.
+ *
+ * Behavior:
+ * - Queries the current user (api.users.me) and, when available, loads the tenant (api.tenants.get).
+ * - Displays a QR code using QrCodeDisplay when tenant data is present.
+ * - When the tenant exists but has no `qrCode`, shows a "Generate QR Code" button that calls
+ *   the generateQrCode mutation with the tenant's `_id`.
+ * - Shows a loading message while tenant data is not yet available.
+ *
+ * @returns The dashboard page's JSX element.
+ */
 export default function DetailerDashboardPage() {
   const user = useQuery(api.users.me);
   const tenant = useQuery(api.tenants.get, user ? { id: user.tenantId! } : 'skip');
